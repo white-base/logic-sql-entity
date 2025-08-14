@@ -2,13 +2,102 @@
   "name": "logic-sql-entity",
   "version": "0.0.1",
   "description": "SQLTable, SQLColumn",
+  "type": "module",
   "main": "index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "require": "./types/index.d.ts",
+        "default": "./types/index.d.ts"
+      },
+      "browser": {
+        "require": "./dist/sql-entity.browser.cjs",
+        "default": "./index.js"
+      },
+      "default": {
+        "require": "./dist/sql-entity.node.cjs",
+        "default": "./index.js"
+      }
+    },
+    "./ko": {
+      "types": {
+        "require": "./types/ko/index.d.ts",
+        "default": "./types/ko/index.d.ts"
+      },
+      "browser": {
+        "require": "./dist/sql-entity.browser.cjs",
+        "default": "./index.js"
+      },
+      "default": {
+        "require": "./dist/sql-entity.node.cjs",
+        "default": "./index.js"
+      }
+    }
+  },
+  "files": [
+    "dist/",
+    "types/",
+    "src/",
+    "index.js"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/.bin/jest",
+    "test:c": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/.bin/jest --coverage",
+    "test:u": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/.bin/jest --updateSnapshot",
+    "test:v": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/.bin/jest --verbose",
+    "serve": "node ./scripts/server.cjs",
+    "cy:run": "wait-on http://localhost:8080 && cypress run",
+    "test:e2e": "concurrently -k \"npm run serve\" \"npm run cy:run\"",
+    "docs": "npm run docs:en && npm run docs:ko",
+    "docs:en": "npx typedoc --out docs/en types/index.d.ts types/T.d.ts",
+    "docs:ko": "npx typedoc --out docs/ko types/ko/index.d.ts types/ko/T.d.ts",
+    "check": "npm run check:ts && npm run check:js",
+    "check:ts": "tsc --noEmit",
+    "check:js": "eslint src/ --ext .js",
+    "prepare": "npm run build",
+    "update": "npm update && npm run build",
+    "build": "rollup -c --bundleConfigAsCjs",
+    "all": "npm run check && npm run build && npm run test"
   },
   "author": "logicfeel",
   "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^7.26.9",
+    "@babel/preset-env": "^7.26.9",
+    "@rollup/plugin-alias": "^5.1.1",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@types/jest": "^29.5.14",
+    "babel-jest": "^29.7.0",
+    "better-sqlite3": "^12.2.0",
+    "concurrently": "^9.1.2",
+    "cypress": "^14.3.0",
+    "eslint": "^9.21.0",
+    "express": "^5.1.0",
+    "fs": "^0.0.1-security",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jsdoc": "^4.0.2",
+    "jsdom": "^24.0.0",
+    "path": "^0.12.7",
+    "rollup": "^4.34.8",
+    "rollup-plugin-auto-external": "^2.0.0",
+    "rollup-plugin-bundle-size": "^1.0.3",
+    "rollup-plugin-cleandir": "^3.0.0",
+    "rollup-plugin-copy": "^3.5.0",
+    "stringify-parse": "^1.0.6",
+    "telejson": "^7.2.0",
+    "ts-jest": "^29.3.2",
+    "typedoc": "^0.25.12",
+    "url": "^0.11.4",
+    "wait-on": "^8.0.3"
+  },
   "dependencies": {
-    "logic-entity": "https://github.com/white-base/core.git"
+    "kysely": "^0.28.5",
+    "logic-entity": "https://github.com/white-base/meta-entity.git"
   }
 }

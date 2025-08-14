@@ -1,0 +1,205 @@
+import { jest } from '@jest/globals';
+import { createTestDB } from './db.js'
+
+import { SQLTable } from '../src/sql-table.js';
+
+import { SqliteDialect } from 'kysely'
+import Database from 'better-sqlite3'
+
+//==============================================================
+// test
+describe("[target: sql-table.js]", () => {
+    describe("SQLTable :: 클래스", () => {
+        beforeEach(() => {
+            jest.resetModules();
+            // MetaRegistry.init();
+        });
+        describe("<테이블 등록후 속성 검사>", () => {
+            it("- 테이블 등록후 속성 검사 ", () => {
+                const table1 = new SQLTable('T1');
+                const table2 = new SQLTable('T2');
+                table1.columns.add('c1');
+                table1.columns.add('c2');
+                table1.columns['c1'].value = 'R1';
+                table1.columns['c2'].value = 'R2';
+                table2.columns.add('c1');
+                table2.columns.add(table1.columns['c2']); // 내부 복제됨
+        
+                // table1
+                expect(table1.columns['c1'].value).toBe('R1');
+                expect(table1.columns['c2'].value).toBe('R2');
+                expect(table1.tableName).toBe('T1');
+                expect(table1.columns['c1']._entity.tableName).toBe('T1');
+                expect(table1.columns['c2']._entity.tableName).toBe('T1');
+                // table2
+                expect(table2.columns['c1'].value).toBe('');
+                expect(table2.columns['c2'].value).toBe('R2');
+                expect(table2.tableName).toBe('T2');
+                expect(table2.columns['c1']._entity.tableName).toBe('T2');
+                expect(table2.columns['c2']._entity.tableName).toBe('T2');
+            });
+        });
+    });
+});
+
+let db;
+
+describe('Kysely + Jest (ESM JS)', () => {
+    beforeAll( async () => {
+        db = createTestDB()
+
+        // 스키마 생성
+        await db.schema
+            .createTable('person')
+            .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+            .addColumn('name', 'text', (col) => col.notNull())
+            .addColumn('age', 'integer', (col) => col.notNull())
+            .execute()
+    })
+
+    afterAll(async () => {
+        await db.destroy()
+    })
+
+    test('INSERT & SELECT', async () => {
+        await db
+            .insertInto('person')
+            .values({ name: '홍길동', age: 30 }).execute()
+
+        const rows = await db.selectFrom('person').selectAll().execute()
+        expect(rows.length).toBe(1)
+        expect(rows[0].name).toBe('홍길동')
+        expect(rows[0].age).toBe(30)
+    })
+
+    test('UPDATE', async () => {
+        await db
+            .updateTable('person')
+            .set({ age: 31 })
+            .where('name', '=', '홍길동')
+            .execute()
+
+        const row = await db
+            .selectFrom('person')
+            .select(['name', 'age'])
+            .where('name', '=', '홍길동')
+            .executeTakeFirst()
+
+        expect(row?.age).toBe(31)
+    })
+
+    test('DELETE', async () => {
+        await db.deleteFrom('person').where('name', '=', '홍길동').execute()
+
+        const rows = await db.selectFrom('person').selectAll().execute()
+        expect(rows.length).toBe(0)
+    })
+
+    it('insert SQLTable', async () => {
+        const table = new SQLTable('person');
+        const conn = {
+            dialect: new SqliteDialect({
+                database: new Database(':memory:')
+            })
+        };
+        table.connect = conn;
+
+        table.columns.add('name');
+        table.columns.add('age');
+
+        // 스키마 생성
+        await table.db.schema
+            .createTable('person')
+            .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+            .addColumn('name', 'text', (col) => col.notNull())
+            .addColumn('age', 'integer', (col) => col.notNull())
+            .execute()
+
+        table.connect = {
+            driver: 'sqlite3',
+            database: ':memory:',
+            // connection: 'Server=.;Database=app;User Id=sa;Password=***;'
+        };
+
+        table.insert({ name: '홍길동', age: 30 });
+        table.insert({ name: '김로직', age: 40 });
+        table.update({ id: 1, name: '홍길동2', age: 32 });
+        table.delete({ id: 2 });
+
+        table.rows.add({ name: '이순신', age: 50 });
+        table.acceptChanges();
+
+
+        // await db.insertInto('person').values(table.rows.toArray()).execute();
+
+        const rows = await table.db.selectFrom('person').selectAll().execute();
+        expect(rows.length).toBe(2);
+        expect(rows[0].name).toBe('홍길동2');
+        expect(rows[0].age).toBe(32);
+        // expect(rows[1].name).toBe('김로직');
+        // expect(rows[1].age).toBe(40);
+        expect(rows[1].name).toBe('이순신');
+        expect(rows[1].age).toBe(50);
+        expect(table.getChanges().length).toBe(0);
+
+    })
+    it('insert SQLTable2', async () => {
+        const table = new SQLTable('person');
+        const conn = {
+            dialect: new SqliteDialect({
+                database: new Database(':memory:')
+            })
+        };
+        table.connect = conn;
+
+        table.columns.add('name');
+        table.columns.add('age');
+
+        // 스키마 생성
+        await table.db.schema
+            .createTable('person')
+            .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+            .addColumn('name', 'text', (col) => col.notNull())
+            .addColumn('age', 'integer', (col) => col.notNull())
+            .execute()
+
+        table.connect = {
+            driver: 'sqlite3',
+            database: ':memory:',
+        };
+
+        table.rows.add({ id: 1, name: '홍길동', age: 30 });
+        table.rows.add({ id: 2, name: '김로직', age: 40 });
+        table.rows.add({ id: 3, name: '이순신', age: 50 });
+
+        table.acceptChanges();
+
+        const rows = await table.db.selectFrom('person').selectAll().execute();
+        expect(rows.length).toBe(3);
+        expect(rows[0].name).toBe('홍길동');
+        expect(rows[0].age).toBe(30);
+        expect(rows[1].name).toBe('김로직');
+        expect(rows[1].age).toBe(40);
+        expect(rows[2].name).toBe('이순신');
+        expect(rows[2].age).toBe(50);
+        expect(table.getChanges().length).toBe(0);
+
+
+        table.rows[0].name = '홍길동2';
+        table.rows[0].age = 32;
+        table.acceptChanges();
+
+        const rows2 = await table.db.selectFrom('person').selectAll().execute();
+
+        expect(rows2.length).toBe(3);
+        expect(rows2[0].name).toBe('홍길동2');
+        expect(rows2[0].age).toBe(32);
+
+        const rows3 = await table.select(1, 10);
+
+        expect(rows3.length).toBe(3);
+        expect(table.getChanges().length).toBe(3);
+        expect(table.rows.count).toBe(6);
+
+    })
+})
