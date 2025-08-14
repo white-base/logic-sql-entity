@@ -1,0 +1,14 @@
+{
+  "name": "logic-sql-entity",
+  "version": "0.0.1",
+  "description": "SQLTable, SQLColumn",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "logicfeel",
+  "license": "MIT",
+  "dependencies": {
+    "logic-entity": "https://github.com/white-base/core.git"
+  }
+}
