@@ -119,11 +119,11 @@ describe('Kysely + Jest (ESM JS)', () => {
             .addColumn('age', 'integer', (col) => col.notNull())
             .execute()
 
-        table.connect = {
-            driver: 'sqlite3',
-            database: ':memory:',
-            // connection: 'Server=.;Database=app;User Id=sa;Password=***;'
-        };
+        // table.connect = {
+        //     driver: 'sqlite3',
+        //     database: ':memory:',
+        //     // connection: 'Server=.;Database=app;User Id=sa;Password=***;'
+        // };
 
         table.insert({ name: '홍길동', age: 30 });
         table.insert({ name: '김로직', age: 40 });
