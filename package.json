@@ -11,10 +11,6 @@
         "require": "./types/index.d.ts",
         "default": "./types/index.d.ts"
       },
-      "browser": {
-        "require": "./dist/sql-entity.browser.cjs",
-        "default": "./index.js"
-      },
       "default": {
         "require": "./dist/sql-entity.node.cjs",
         "default": "./index.js"
@@ -24,10 +20,6 @@
       "types": {
         "require": "./types/ko/index.d.ts",
         "default": "./types/ko/index.d.ts"
-      },
-      "browser": {
-        "require": "./dist/sql-entity.browser.cjs",
-        "default": "./index.js"
       },
       "default": {
         "require": "./dist/sql-entity.node.cjs",
@@ -47,8 +39,6 @@
     "test:u": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/.bin/jest --updateSnapshot",
     "test:v": "node --experimental-vm-modules --no-warnings=ExperimentalWarning node_modules/.bin/jest --verbose",
     "serve": "node ./scripts/server.cjs",
-    "cy:run": "wait-on http://localhost:8080 && cypress run",
-    "test:e2e": "concurrently -k \"npm run serve\" \"npm run cy:run\"",
     "docs": "npm run docs:en && npm run docs:ko",
     "docs:en": "npx typedoc --out docs/en types/index.d.ts types/T.d.ts",
     "docs:ko": "npx typedoc --out docs/ko types/ko/index.d.ts types/ko/T.d.ts",

@@ -179,7 +179,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         table.rows.add({ id: 2, name: '김로직', age: 40 });
         table.rows.add({ id: 3, name: '이순신', age: 50 });
 
-        table.acceptChanges();
+        await table.acceptChanges();
 
         const rows = await table.db.selectFrom('person').selectAll().execute();
         expect(rows.length).toBe(3);
