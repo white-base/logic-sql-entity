@@ -1,6 +1,6 @@
 {
   "name": "logic-sql-entity",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "SQLTable, SQLColumn",
   "type": "module",
   "main": "index.js",
