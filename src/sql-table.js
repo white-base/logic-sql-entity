@@ -88,7 +88,9 @@ class SQLTable extends MetaTable {
         if (p_row instanceof SQLRow || _isObject(p_row)) {
             // this.rows.add(p_row);
             // TODO: p_row 에 대한 검사 필요
-            return await this.db.insertInto(this.tableName).values(p_row).execute();
+            const pk = 'id'
+            const { [pk]: id, ...changes } = p_row
+            return await this.db.insertInto(this.tableName).values({ ...changes }).execute();
         } else {
             throw new Error('Invalid row type');
         }
@@ -130,19 +132,21 @@ class SQLTable extends MetaTable {
     /**
      * @override
      */
-    acceptChanges() {
+    async acceptChanges() {
         const trans = this.rows._transQueue.select();
         const tableName = this._name;
-        
-        trans.forEach(async (row) => {
+
+        for (const row of trans) {
+            const pk = 'id'
+            const { [pk]: id, ...changes } = row.ref
             if (row.cmd === 'I') {
-                await this.db.insertInto(tableName).values(row.ref).execute();
+                await this.db.insertInto(tableName).values({ ...changes }).execute();
             } else if (row.cmd === 'U') {
-                await this.db.updateTable(tableName).set(row.ref).where('id', '=', row.ref.id).execute();
+                await this.db.updateTable(tableName).set({ ...changes }).where('id', '=', id).execute();
             } else if (row.cmd === 'D') {
-                await this.db.deleteFrom(tableName).where('id', '=', row.ref.id).execute();
+                await this.db.deleteFrom(tableName).where('id', '=', id).execute();
             }
-        });
+        }
         this.rows.commit();
     }
 

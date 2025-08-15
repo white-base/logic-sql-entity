@@ -6,6 +6,9 @@ import { SQLTable } from '../src/sql-table.js';
 import { SqliteDialect } from 'kysely'
 import Database from 'better-sqlite3'
 
+import { MysqlDialect } from 'kysely'
+import mysql from 'mysql2'
+
 //==============================================================
 // test
 describe("[target: sql-table.js]", () => {
@@ -104,6 +107,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         };
         table.connect = conn;
 
+        table.columns.add('id');
         table.columns.add('name');
         table.columns.add('age');
 
@@ -127,7 +131,9 @@ describe('Kysely + Jest (ESM JS)', () => {
         table.delete({ id: 2 });
 
         table.rows.add({ name: '이순신', age: 50 });
-        table.acceptChanges();
+        table.rows[0].name = '이순신2';
+
+        await table.acceptChanges();
 
 
         // await db.insertInto('person').values(table.rows.toArray()).execute();
@@ -138,12 +144,12 @@ describe('Kysely + Jest (ESM JS)', () => {
         expect(rows[0].age).toBe(32);
         // expect(rows[1].name).toBe('김로직');
         // expect(rows[1].age).toBe(40);
-        expect(rows[1].name).toBe('이순신');
+        expect(rows[1].name).toBe('이순신2');
         expect(rows[1].age).toBe(50);
         expect(table.getChanges().length).toBe(0);
 
     })
-    it('insert SQLTable2', async () => {
+    it('sqlite3 SQLTable', async () => {
         const table = new SQLTable('person');
         const conn = {
             dialect: new SqliteDialect({
@@ -152,6 +158,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         };
         table.connect = conn;
 
+        table.columns.add('id');
         table.columns.add('name');
         table.columns.add('age');
 
@@ -201,5 +208,81 @@ describe('Kysely + Jest (ESM JS)', () => {
         expect(table.getChanges().length).toBe(3);
         expect(table.rows.count).toBe(6);
 
+    })
+
+    it('insert SQLTable3 mysql', async () => {
+        const table = new SQLTable('person');
+        const conn = {
+            dialect: new MysqlDialect({
+                pool: mysql.createPool({
+                    host: 'localhost',       // MySQL 서버 주소
+                    port: 3306,               // 포트 (기본값 3306)
+                    user: 'testuser',             // 사용자명
+                    password: 'testpw',     // 비밀번호
+                    database: 'testdb',      // 사용할 데이터베이스명
+                    connectionLimit: 10       // 커넥션 풀 최대 개수
+                })
+            })
+        };
+        table.connect = conn;
+
+        table.columns.add('id');
+        table.columns.add('name');
+        table.columns.add('age');
+
+        // 스키마 생성
+        // await table.db.schema
+        //     .createTable('person')
+        //     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+        //     .addColumn('name', 'text', (col) => col.notNull())
+        //     .addColumn('age', 'integer', (col) => col.notNull())
+        //     .execute()
+
+        await table.db
+            .deleteFrom('person') // 삭제할 테이블
+            .execute();
+
+
+        await table.insert({ name: '홍길동', age: 30 });
+        await table.insert({ name: '김로직', age: 40 });
+        await table.insert({ name: '이순신', age: 50 });
+
+        await table.acceptChanges();
+    
+        const rows = await table.db.selectFrom('person').selectAll().execute();
+        expect(rows.length).toBe(3);
+        expect(rows[0].name).toBe('홍길동');
+        expect(rows[0].age).toBe(30);
+        expect(rows[1].name).toBe('김로직');
+        expect(rows[1].age).toBe(40);
+        expect(rows[2].name).toBe('이순신');
+        expect(rows[2].age).toBe(50);
+        expect(table.getChanges().length).toBe(0);
+
+        await table.select(1, 10);
+
+        table.rows[0].name = '홍길동2';
+        table.rows[0].age = 32;
+        await table.acceptChanges();
+
+        const rows2 = await table.db.selectFrom('person').selectAll().execute();
+
+        expect(rows2.length).toBe(6);
+        expect(rows2[0].name).toBe('홍길동2');
+        expect(rows2[0].age).toBe(32);
+
+        const rows3 = await table.select(1, 10);
+
+        expect(rows3.length).toBe(6);
+        expect(table.getChanges().length).toBe(6);
+        expect(table.rows.count).toBe(9);
+
+        // await table.db.schema
+        //     .dropTable('person') // 삭제할 테이블명
+        //     .ifExists()         // 존재할 때만 실행 (옵션)
+        //     .cascade()          // 외래키 제약조건까지 함께 삭제 (옵션)
+        //     .execute()
+
+        table.db.destroy();
     })
 })
