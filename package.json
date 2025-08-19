@@ -45,6 +45,7 @@
     "check": "npm run check:ts && npm run check:js",
     "check:ts": "tsc --noEmit",
     "check:js": "eslint src/ --ext .js",
+    "check:duple": "node ./scripts/check-duplicates.mjs",
     "prepare": "npm run build",
     "update": "npm update && npm run build",
     "build": "rollup -c --bundleConfigAsCjs",

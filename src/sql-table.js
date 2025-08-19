@@ -66,12 +66,21 @@ class SQLTable extends MetaTable {
         // page: 1부터 시작, size: 페이지당 row 수
         const limit = size > 0 ? size : 10;
         const offset = page > 1 ? (page - 1) * limit : 0;
-        const rows = await this.db
-            .selectFrom(this.tableName)
-            .selectAll()
-            .limit(limit)
-            .offset(offset)
-            .execute();
+        let rows = [];
+        try {
+            rows = await this.db
+                .selectFrom(this.tableName)
+                .selectAll()
+                .limit(limit)
+                .offset(offset)
+                .execute();
+        } catch (err) {
+            if (err.message && err.message.includes('no such table')) {
+                throw new Error(`테이블(${this.tableName})이 존재하지 않습니다.`);
+            } else {
+                throw err;
+            }
+        }
 
         rows.forEach(row => {
             this.rows.add(row);

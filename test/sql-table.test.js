@@ -112,6 +112,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         table.columns.add('age');
 
         // 스키마 생성
+        // 테이블 존재 여부 검사 후 생성
         await table.db.schema
             .createTable('person')
             .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
@@ -230,17 +231,22 @@ describe('Kysely + Jest (ESM JS)', () => {
         table.columns.add('name');
         table.columns.add('age');
 
+        try {
+            await table.db.schema.dropTable('person').ifExists().execute();
+        } catch (err) {
+            // 무시: 테이블이 없을 경우
+        }
         // 스키마 생성
-        // await table.db.schema
-        //     .createTable('person')
-        //     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
-        //     .addColumn('name', 'text', (col) => col.notNull())
-        //     .addColumn('age', 'integer', (col) => col.notNull())
-        //     .execute()
+        await table.db.schema
+            .createTable('person')
+            .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+            .addColumn('name', 'text', (col) => col.notNull())
+            .addColumn('age', 'integer', (col) => col.notNull())
+            .execute()
 
-        await table.db
-            .deleteFrom('person') // 삭제할 테이블
-            .execute();
+        // await table.db
+        //     .deleteFrom('person') // 삭제할 테이블
+        //     .execute();
 
 
         await table.insert({ name: '홍길동', age: 30 });
