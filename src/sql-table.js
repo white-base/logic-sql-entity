@@ -62,6 +62,48 @@ class SQLTable extends MetaTable {
         return this._db;
     }
 
+    async createSchema() {
+        let schema = this.db.schema.createTable(this.tableName);
+
+        // TODO: columns of 연산자 this.columns is not iterable 오류 처리
+        // for (const col of this.columns) {
+        for (const col in this.columns) {
+            const options = normalizeOptions(this.columns[col]);
+            schema = await schema.addColumn(this.columns[col].columnName, this.columns[col].dataType, options);
+        }
+
+        await schema.execute();
+
+        // inner function
+        const chainOptionFns = (fns = []) => (col) => fns.reduce((acc, fn) => fn(acc), col);
+        
+        function normalizeOptions(options) {
+            // if (!options) return undefined;
+            // if (typeof options === 'function') return options;
+            // if (Array.isArray(options)) return chainOptionFns(options);
+            return buildColumnOptionsFromDecl(options);
+        };
+
+        function buildColumnOptionsFromDecl(def = {}) {
+            return (col) => {
+                if (def.pk) col = col.primaryKey();
+                if (def.autoIncrement) col = col.autoIncrement();
+                if (def.notNull) col = col.notNull();
+                if (def.unique) col = col.unique();
+                // if (def.unsigned && typeof col.unsigned === 'function') col = col.unsigned();
+                // if (def.defaultTo !== undefined) col = col.defaultTo(def.defaultTo);
+                // if (def.references) {
+                //     const r = def.references;
+                //     col = col.references(`${r.table}.${r.column}`);
+                //     if (r.onDelete) col = col.onDelete(r.onDelete);
+                //     if (r.onUpdate) col = col.onUpdate(r.onUpdate);
+                // }
+                // if (def.check) col = col.check(def.check);
+                return col;
+            };
+        }
+    }
+
     async select(page = 1, size = 10) {
         // page: 1부터 시작, size: 페이지당 row 수
         const limit = size > 0 ? size : 10;
