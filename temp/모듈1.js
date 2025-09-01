@@ -81,20 +81,17 @@ console.log('Tables:', tables);
 
 
 // 데이터 삽입
-import { sql } from 'kysely';
+// import { sql } from 'kysely';
 
 await ctx_sto_core.db
   .insertInto('sto_master')
   .values({ sto_name: 'Logic Store' })
   .execute();
-
 const sto_master2 = await ctx_sto_core.db
   .selectFrom('sto_master')
   .select(['sto_name', 'sto_id'])
   .execute();
-
 console.log('sto_master2:', sto_master2);
-
 
 
 // 데이터 조회
@@ -104,7 +101,6 @@ console.log('sto_master2:', sto_master2);
 // `.execute(ctx_sto_core.db);
 
 // console.log('sto_master:', sto_master.rows);
-
 
 
 
