@@ -32,7 +32,7 @@ class SQLContext extends MetaObject {
         return this._db;
     }
 
-    createSchema() {
+    async createSchema() {
         /**
          * 우선순위
          * 1. 하위 스키마 실행
@@ -43,19 +43,21 @@ class SQLContext extends MetaObject {
 
         // TODO: DB 연결 검사
 
-        // 하위 스키마 실행
-        this.contexts.forEach( (ctx) => {
-            // TODO: 위치 조정
+        // 하위 스키마 실행 (순차적으로 대기)
+        for (const name in this.contexts.$keys) {
+            const ctx = this.contexts[name];
+            if (!ctx) continue;
             ctx.connect = this.connect;
-            ctx.createSchema();
-        });
+            await ctx.createSchema();
+        }
 
-        // 테이블 생성
-        this.tables.forEach( (table) => {
-            // TODO: 위치 조정
+        // 테이블 생성 (순차적으로 대기)
+        for (const name in this.tables.$keys) {
+            const table = this.tables[name];
+            if (!table) continue;
             table.connect = this.connect;
-            table.createSchema();
-        });
+            await table.createSchema();
+        }
 
     }
 
