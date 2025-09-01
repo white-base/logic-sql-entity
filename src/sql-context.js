@@ -44,16 +44,18 @@ class SQLContext extends MetaObject {
         // TODO: DB 연결 검사
 
         // 하위 스키마 실행 (순차적으로 대기)
-        for (const name in this.contexts.$keys) {
-            const ctx = this.contexts[name];
+        const childContexts = [];
+        this.contexts.forEach((ctx) => childContexts.push(ctx));
+        for (const ctx of childContexts) {
             if (!ctx) continue;
             ctx.connect = this.connect;
             await ctx.createSchema();
         }
 
         // 테이블 생성 (순차적으로 대기)
-        for (const name in this.tables.$keys) {
-            const table = this.tables[name];
+        const childTables = [];
+        this.tables.forEach((tbl) => childTables.push(tbl));
+        for (const table of childTables) {
             if (!table) continue;
             table.connect = this.connect;
             await table.createSchema();

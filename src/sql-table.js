@@ -65,11 +65,15 @@ class SQLTable extends MetaTable {
     async createSchema() {
         let schema = this.db.schema.createTable(this.tableName);
 
-        // TODO: columns of 연산자 this.columns is not iterable 오류 처리
-        // for (const col of this.columns) {
-        for (const col in this.columns) {
-            const options = normalizeOptions(this.columns[col]);
-            schema = await schema.addColumn(this.columns[col].columnName, this.columns[col].dataType, options);
+        // 컬렉션 키 기준으로 안전하게 순회
+        const colKeys = this.columns.$keys ?? Object.keys(this.columns);
+        for (const key of colKeys) {
+            const col = this.columns[key];
+            if (!col) continue;
+            const options = normalizeOptions(col);
+            const name = (typeof col.name === 'string' && col.name) ? col.name : key;
+            const type = col.dataType || 'text';
+            schema = schema.addColumn(name, type, options);
         }
 
         await schema.execute();

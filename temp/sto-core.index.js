@@ -6,5 +6,11 @@ const ctx_sto_core = new SQLContext();
 ctx_sto_core.tables.add(sto_master);
 // ctx_sto_core.addTable(sto_master);
 
+// 재정의
+ctx_sto_core.tables.insert = function() {
+    console.log('...');
+    
+}
+
 export default ctx_sto_core;
 export { ctx_sto_core };

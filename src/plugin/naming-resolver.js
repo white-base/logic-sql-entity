@@ -85,17 +85,44 @@ function deepCloneAndTransform (node, f) {
 class CombinedNamingPlugin {
   constructor(resolver) { this.r = resolver }
 
-  transformQuery({ query }) {
+  transformQuery({ node }) {
     // 실제 AST 키는 Kysely 버전에 따라 약간 다를 수 있습니다.
-    return deepCloneAndTransform(query, (node) => {
+    return deepCloneAndTransform(node, (node) => {
       if (!node || typeof node !== 'object') return node
 
-      // 테이블 노드
-      if (node.kind === 'TableNode' && node.table?.kind === 'IdentifierNode') {
-        const logical = node.table.name
+      // 테이블 노드 (TableNode -> SchemableIdentifierNode -> IdentifierNode)
+      if (node.kind === 'TableNode'
+        && node.table?.kind === 'SchemableIdentifierNode'
+        && node.table.identifier?.kind === 'IdentifierNode') {
+        const logical = node.table.identifier.name
         const resolved = this.r.resolveTable(logical)
         if (resolved !== logical) {
-          return { ...node, table: { ...node.table, name: resolved } }
+          return {
+            ...node,
+            table: {
+              ...node.table,
+              identifier: { ...node.table.identifier, name: resolved }
+            }
+          }
+        }
+        return node
+      }
+
+      // Create/Drop 테이블 노드 안의 Identifier 처리
+      if ((node.kind === 'CreateTableNode' || node.kind === 'DropTableNode') && node.table) {
+        const tbl = node.table
+        if (tbl.kind === 'IdentifierNode') {
+          const logical = tbl.name
+          const resolved = this.r.resolveTable(logical)
+          if (resolved !== logical) {
+            return { ...node, table: { ...tbl, name: resolved } }
+          }
+        } else if (tbl.kind === 'TableNode' && tbl.table?.kind === 'IdentifierNode') {
+          const logical = tbl.table.name
+          const resolved = this.r.resolveTable(logical)
+          if (resolved !== logical) {
+            return { ...node, table: { ...tbl, table: { ...tbl.table, name: resolved } } }
+          }
         }
         return node
       }
@@ -122,6 +149,16 @@ class CombinedNamingPlugin {
         return node
       }
 
+      // 스키마 컬럼 정의 노드 (createTable 내부)
+      if (node.kind === 'ColumnDefinitionNode' && node.column?.kind === 'IdentifierNode') {
+        const logicalCol = node.column.name
+        const resolvedCol = this.r.resolveColumn('__schema__', logicalCol)
+        if (resolvedCol !== logicalCol) {
+          return { ...node, column: { ...node.column, name: resolvedCol } }
+        }
+        return node
+      }
+
       return node
     })
   }
@@ -130,4 +167,3 @@ class CombinedNamingPlugin {
 }
 
 export { NamingResolver, CombinedNamingPlugin };
-
