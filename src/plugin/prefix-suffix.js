@@ -6,26 +6,18 @@ class PrefixSuffixPlugin {
    * @param {{
    *  tablePrefix?: string,
    *  tableSuffix?: string,
-   *  columnPrefix?: string,
-   *  columnSuffix?: string,
    *  excludeTables?: Array<string|RegExp>,
-   *  excludeColumns?: Array<string|RegExp>,
    *  caseSensitive?: boolean,
    * }} opts
    */
   constructor (opts = {}) {
     this.tablePrefix  = opts.tablePrefix  || ''
     this.tableSuffix  = opts.tableSuffix  || ''
-    this.columnPrefix = opts.columnPrefix || ''
-    this.columnSuffix = opts.columnSuffix || ''
     this.caseSensitive = opts.caseSensitive ?? true
     // 테이블/컬럼 매핑 추가
     this.tableMap = opts.tableMap || {} // { 원본명: 변경명 }
-    this.columnMap = opts.columnMap || {} // { 테이블명: { 원본컬럼: 변경컬럼 } } 또는 { 원본컬럼: 변경컬럼 }
-    this.allowAffixOnMapped = opts.allowAffixOnMapped ?? false
     // 기본적으로 sqlite 시스템 테이블은 제외
     this.excludeTables = opts.excludeTables ?? []
-    this.excludeColumns = opts.excludeColumns ?? []
   }
 
   #match (name, patterns) {
@@ -39,87 +31,65 @@ class PrefixSuffixPlugin {
   }
 
   transformQuery ({ node /* RootOperationNode */, queryId }) {
-    // 테이블명/컬럼명 매핑 및 prefix/suffix 제외 처리
+    // 테이블명 매핑(tableMap)이 있으면 prefix/suffix는 무시한다.
+    // DDL/참조 노드까지 포괄 처리.
     const transformed = deepCloneAndTransform(node, (node) => {
-      // 테이블 식별자
-      if (node && node.kind === 'TableNode' && node.table && node.table.kind === 'SchemableIdentifierNode' && node.table.identifier && node.table.identifier.kind === 'IdentifierNode') {
+      if (!node || typeof node !== 'object') return node
+
+      // 1) 일반 쿼리 내 테이블 노드
+      if (node.kind === 'TableNode'
+        && node.table?.kind === 'SchemableIdentifierNode'
+        && node.table.identifier?.kind === 'IdentifierNode') {
         const tname = node.table.identifier.name
-        // 매핑 우선 적용
-        if (this.tableMap[tname]) {
+        const mapped = this.tableMap[tname]
+        if (mapped) {
+          // 매핑되면 접두/접미사 미적용
           return {
             ...node,
-            table: {
-              ...node.table,
-              identifier: {
-                ...node.table.identifier,
-                name: this.tableMap[tname]
-              }
-            }
+            table: { ...node.table, identifier: { ...node.table.identifier, name: mapped } }
           }
         }
-        // 제외 대상이면 prefix/suffix 미적용
         if (this.#match(tname, this.excludeTables)) return node
         return {
           ...node,
           table: {
             ...node.table,
-            identifier: {
-              ...node.table.identifier,
-              name: this.tablePrefix + tname + this.tableSuffix
-            }
+            identifier: { ...node.table.identifier, name: this.tablePrefix + tname + this.tableSuffix }
           }
         }
       }
 
-      // 컬럼 식별자
-      if (node && node.kind === 'ColumnNode' && node.column && node.column.kind === 'IdentifierNode') {
-        const cname = node.column.name
-        const tnameCurrent = (node.table && node.table.kind === 'IdentifierNode') ? node.table.name : undefined
-        // 원본 테이블명 추정 (tableMap 역탐색)
-        let tnameOriginal = tnameCurrent
-        if (tnameCurrent) {
-          for (const [orig, mapped] of Object.entries(this.tableMap)) {
-            if (mapped === tnameCurrent) { tnameOriginal = orig; break }
-          }
+      // 2) CREATE/DROP TABLE 등 DDL 노드의 테이블 식별자 처리
+      if ((node.kind === 'CreateTableNode' || node.kind === 'DropTableNode') && node.table) {
+        const tbl = node.table
+        // 2-1) IdentifierNode 직접 보유하는 경우
+        if (tbl.kind === 'IdentifierNode') {
+          const tname = tbl.name
+          const mapped = this.tableMap[tname]
+          if (mapped) return { ...node, table: { ...tbl, name: mapped } }
+          if (this.#match(tname, this.excludeTables)) return node
+          return { ...node, table: { ...tbl, name: this.tablePrefix + tname + this.tableSuffix } }
         }
-        // 매핑 우선 적용: 테이블별 -> 전역(flat)
-        let mappedCol
-        if (tnameOriginal && this.columnMap[tnameOriginal] && this.columnMap[tnameOriginal][cname]) {
-          mappedCol = this.columnMap[tnameOriginal][cname]
-        } else if (typeof this.columnMap[cname] === 'string') {
-          mappedCol = this.columnMap[cname]
-        } else if (!tnameOriginal) {
-          // 테이블 정보가 없으면 모든 테이블 맵에서 검색(단일 매칭 시에만 적용)
-          const candidates = []
-          for (const [tbl, map] of Object.entries(this.columnMap)) {
-            if (map && typeof map === 'object' && map[cname]) candidates.push(map[cname])
-          }
-          if (candidates.length === 1) mappedCol = candidates[0]
+        // 2-2) TableNode 래핑 형태인 경우
+        if (tbl.kind === 'TableNode' && tbl.table?.kind === 'IdentifierNode') {
+          const tname = tbl.table.name
+          const mapped = this.tableMap[tname]
+          if (mapped) return { ...node, table: { ...tbl, table: { ...tbl.table, name: mapped } } }
+          if (this.#match(tname, this.excludeTables)) return node
+          return { ...node, table: { ...tbl, table: { ...tbl.table, name: this.tablePrefix + tname + this.tableSuffix } } }
         }
-
-        if (mappedCol) {
-          const name = this.allowAffixOnMapped ? (this.columnPrefix + mappedCol + this.columnSuffix) : mappedCol
-          return { ...node, column: { ...node.column, name } }
-        }
-
-        if (this.#match(cname, this.excludeColumns) || (tnameCurrent && this.#match(tnameCurrent, this.excludeTables))) return node
-        return { ...node, column: { ...node.column, name: this.columnPrefix + cname + this.columnSuffix } }
+        return node
       }
 
-      // 스키마: 컬럼 정의 노드 (createTable 내부)
-      if (node && node.kind === 'ColumnDefinitionNode' && node.column && node.column.kind === 'IdentifierNode') {
-        // 테이블명 추출 불가시 prefix/suffix만 적용
-        const cname = node.column.name;
-        // 컬럼 매핑 우선 적용 (테이블명 필요시 확장)
-        if (this.#match(cname, this.excludeColumns)) return node
-        return {
-          ...node,
-          column: {
-            ...node.column,
-            name: this.columnPrefix + cname + this.columnSuffix
-          }
-        }
+      // 3) FROM/JOIN 등의 테이블 참조 노드
+      if (node.kind === 'TableReferenceNode' && node.table?.kind === 'IdentifierNode') {
+        const tname = node.table.name
+        const mapped = this.tableMap[tname]
+        if (mapped) return { ...node, table: { ...node.table, name: mapped } }
+        if (this.#match(tname, this.excludeTables)) return node
+        return { ...node, table: { ...node.table, name: this.tablePrefix + tname + this.tableSuffix } }
       }
+
       return node
     })
     return transformed
