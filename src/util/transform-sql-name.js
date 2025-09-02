@@ -1,17 +1,14 @@
 export function transformSqlNames(sql, opts = {}) {
+  // DEBUG marker
+  // console.log('DBG transformSqlNames called')
   const {
     // 이름 치환 맵
     tableMap = {}, // { original: mapped }
-    // columnMap: { table: { col: mapped }, ... } 또는 { col: mapped }
-    columnMap = {},
     // 접두/접미사
     tablePrefix = '',
     tableSuffix = '',
-    columnPrefix = '',
-    columnSuffix = '',
     // 예외 처리 및 대소문자
     excludeTables = [], // Array<string|RegExp>
-    excludeColumns = [], // Array<string|RegExp>
     caseSensitive = false, // 일반 SQL은 식별자 대소문자 무시가 많음
   } = opts;
 
@@ -48,31 +45,12 @@ export function transformSqlNames(sql, opts = {}) {
     'SELECT','FROM','WHERE','AND','OR','AS','MAX','MIN','COUNT','ON','JOIN','LEFT','RIGHT','INNER','OUTER','FULL','GROUP','BY','ORDER','INSERT','INTO','VALUES','UPDATE','SET','DELETE','CREATE','TABLE','ALTER','DROP','TRUNCATE','HAVING','DISTINCT','UNION','ALL','CASE','WHEN','THEN','ELSE','END','LIMIT','OFFSET'
   ]);
 
-  // columnMap 평탄화/준비
-  const isPerTableColMap = Object.values(columnMap).some((v) => v && typeof v === 'object');
-  const perTableColMap = isPerTableColMap ? columnMap : {};
-  const globalColMap = isPerTableColMap ? {} : columnMap; // { col: mapped }
-
   // 역 테이블맵 (매핑된 이름 -> 원본)
   const revTableMap = Object.fromEntries(
     Object.entries(tableMap).map(([orig, mapped]) => [norm(mapped), orig])
   );
   const mappedTableValues = new Set(Object.values(tableMap).map(norm));
 
-  // 유일 전역 컬럼 매핑 후보 계산: perTable에서 동일 원본컬럼이 하나의 매핑으로만 등장할 때 허용
-  const uniqueColMap = (() => {
-    if (Object.keys(globalColMap).length) return globalColMap;
-    const count = new Map(); // orig -> Set(mapped)
-    for (const m of Object.values(perTableColMap)) {
-      for (const [c, v] of Object.entries(m)) {
-        if (!count.has(c)) count.set(c, new Set());
-        count.get(c).add(v);
-      }
-    }
-    const out = {};
-    for (const [c, set] of count.entries()) if (set.size === 1) out[c] = [...set][0];
-    return out;
-  })();
 
   // ===== 1) 문자열/주석 분리 =====
   const segments = splitSqlSegments(sql);
@@ -81,7 +59,31 @@ export function transformSqlNames(sql, opts = {}) {
   const process = (text) => {
     let s = text;
 
-    // --- A) 테이블/컬럼 매핑 (접두/접미사 미적용) ---
+    // 토큰 유틸: 식별자 토큰(스키마 포함 가능)의 정규식과 헬퍼
+    // 간단/안전한 인용 식별자 토큰 (백슬래시 이스케이프는 고려하지 않음)
+    const identToken = '(?:"[^"]*"|`[^`]*`|\\[[^\\]]+\\]|[A-Za-z_][A-Za-z0-9_]*)';
+    const unquote = (tok) => {
+      if (!tok) return { name: '', quote: null };
+      if (tok.startsWith('"') && tok.endsWith('"')) {
+        // Postgres 식별자: "" -> " 로 이스케이프되지만 여기서는 단순 처리
+        return { name: tok.slice(1, -1).replace(/""/g, '"'), quote: '"' };
+      }
+      if (tok.startsWith('`') && tok.endsWith('`')) {
+        return { name: tok.slice(1, -1), quote: '`' };
+      }
+      if (tok.startsWith('[') && tok.endsWith(']')) {
+        return { name: tok.slice(1, -1), quote: '[]' };
+      }
+      return { name: tok, quote: null };
+    };
+    const rewrap = (name, quote) => {
+      if (quote === '"') return `"${name.replace(/"/g, '""')}"`;
+      if (quote === '`') return `\`${name}\``;
+      if (quote === '[]') return `[${name}]`;
+      return name;
+    };
+
+    // --- A) 테이블 매핑 (접두/접미사 미적용) ---
     // A1. 테이블 매핑
     if (Object.keys(tableMap).length) {
       const keys = Object.keys(tableMap).sort((a,b)=>b.length-a.length).map(esc).join('|');
@@ -89,128 +91,88 @@ export function transformSqlNames(sql, opts = {}) {
       s = s.replace(re, (m) => tableMap[caseSensitive ? m : findKeyIgnoreCase(tableMap, m)]);
     }
 
-    // A2. 컬럼 매핑 - (i) table.column 형태 우선
-    s = s.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g, (full, left, right) => {
-      // left: 스키마/테이블/별칭 등. 가능한 원본 테이블명 추정
-      let tCandidate = left;
-      const leftNorm = norm(left);
-      if (revTableMap[leftNorm]) {
-        tCandidate = revTableMap[leftNorm]; // 매핑된 테이블 -> 원본 복원
-      } else {
-        tCandidate = stripAffix(left, tablePrefix, tableSuffix);
-      }
-
-      let outRight = right;
-      const tblMap = perTableColMap[tCandidate];
-      if (tblMap && tblMap[right]) {
-        outRight = tblMap[right];
-      } else if (globalColMap[right]) {
-        outRight = globalColMap[right];
-      }
-      return `${left}.${outRight}`;
-    });
-
-    // A3. 컬럼 매핑 - (ii) 단독 컬럼 (고유/전역 매핑만)
-    if (Object.keys(uniqueColMap).length) {
-      const keys = Object.keys(uniqueColMap).sort((a,b)=>b.length-a.length).map(esc).join('|');
-      const re = new RegExp(`\\b(?:${keys})\\b`, caseSensitive ? 'g' : 'gi');
-      s = s.replace(re, (m, offset) => {
-        // 점(.)으로 수식된 경우는 위에서 처리됨 -> 건너뜀
-        const prev = s[offset - 1];
-        const next = s[offset + m.length];
-        if (prev === '.' || next === '.') return m;
-        const key = caseSensitive ? m : findKeyIgnoreCase(uniqueColMap, m);
-        return uniqueColMap[key];
+    // --- B) 테이블 접두/접미사 적용 + (문맥 내) 매핑 처리 ---
+    //      - 문맥상 테이블로 확실한 토큰에 대해서는 쌍따옴표 등 인용 포함 처리를 하고,
+    //        tableMap이 매칭되면 접두/접미사는 적용하지 않는다.
+    // B1. 키워드 뒤 테이블명 (FROM/JOIN/INTO/UPDATE) - 인용식별자 지원
+    {
+      const reFromJoin = new RegExp(`\\b(FROM|JOIN|INTO|UPDATE)\\b\\s+((?:${identToken}\\.)?)(${identToken})`, 'gi');
+      s = s.replace(reFromJoin, (full, kw, schemaDot, tblTok) => {
+        // DEBUG: mark match
+        if (process && process.env && process.env.DEBUG_SQL_TRANSFORM) {
+          console.log('DBG FROM/JOIN match', { full, kw, schemaDot, tblTok });
+        }
+        const { name: tblName, quote } = unquote(tblTok);
+        const original = stripAffix(tblName, tablePrefix, tableSuffix);
+        // 매핑 우선 (대소문자 옵션 반영)
+        const mapped = caseSensitive
+          ? tableMap[original]
+          : tableMap[findKeyIgnoreCase(tableMap, original)];
+        if (mapped) {
+          const outTok = rewrap(mapped, quote);
+          return `${kw} ${schemaDot || ''}${outTok}`;
+        }
+        if (mappedTableValues.has(norm(tblName)) || matchList(tblName, excludeTables)) {
+          return `${kw} ${schemaDot || ''}${tblTok}`;
+        }
+        const affixed = addAffix(original, tablePrefix, tableSuffix);
+        const outTok = rewrap(affixed, quote);
+        return `${kw} ${schemaDot || ''}${outTok}`;
       });
     }
 
-    // --- B) 테이블 접두/접미사 적용 (매핑 결과/제외대상/이미 접두/접미사 적용된 경우 제외) ---
-    // B1. 키워드 뒤 테이블명 (FROM/JOIN/INTO/UPDATE)
-    s = s.replace(/\b(FROM|JOIN|INTO|UPDATE)\b\s+((?:[A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)/gi,
-      (full, kw, name) => {
-        const parts = name.split('.');
-        const tbl = parts.pop();
-        const schema = parts.length ? parts.join('.') + '.' : '';
-        const original = stripAffix(tbl, tablePrefix, tableSuffix);
-        if (mappedTableValues.has(norm(tbl)) || matchList(tbl, excludeTables)) return `${kw} ${schema}${tbl}`;
+    // B2. DDL 계열 (CREATE/ALTER/DROP/TRUNCATE TABLE) - 인용식별자 지원
+    {
+      const reDDL = new RegExp(`\\b(CREATE|ALTER|DROP|TRUNCATE)\\s+TABLE\\b\\s+((?:${identToken}\\.)?)(${identToken})`, 'gi');
+      s = s.replace(reDDL, (full, kw, schemaDot, tblTok) => {
+        const { name: tblName, quote } = unquote(tblTok);
+        const original = stripAffix(tblName, tablePrefix, tableSuffix);
+        // 매핑 우선 (대소문자 옵션 반영)
+        const mapped = caseSensitive
+          ? tableMap[original]
+          : tableMap[findKeyIgnoreCase(tableMap, original)];
+        if (mapped) {
+          const outTok = rewrap(mapped, quote);
+          return `${kw} TABLE ${schemaDot || ''}${outTok}`;
+        }
+        if (mappedTableValues.has(norm(tblName)) || matchList(tblName, excludeTables)) {
+          return `${kw} TABLE ${schemaDot || ''}${tblTok}`;
+        }
         const affixed = addAffix(original, tablePrefix, tableSuffix);
-        return `${kw} ${schema}${affixed}`;
+        const outTok = rewrap(affixed, quote);
+        return `${kw} TABLE ${schemaDot || ''}${outTok}`;
       });
+    }
 
-    // B2. DDL 계열 (CREATE/ALTER/DROP/TRUNCATE TABLE)
-    s = s.replace(/\b(CREATE|ALTER|DROP|TRUNCATE)\s+TABLE\b\s+((?:[A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)/gi,
-      (full, kw, name) => {
-        const parts = name.split('.');
-        const tbl = parts.pop();
-        const schema = parts.length ? parts.join('.') + '.' : '';
+    // B3. 점 앞(좌) 토큰이 테이블로 쓰이는 경우: TableA.col / "TableA".col
+    {
+      // 앞 문자가 식별자 구성요소가 아닌 경우에만 매칭 시작
+      const reLeftOfDot = new RegExp('(^|[^A-Za-z0-9_"`\\]])(' + identToken + ')(?=\\.)', 'g');
+      s = s.replace(reLeftOfDot, (full, pre, tok) => {
+        const { name: tbl, quote } = unquote(tok);
         const original = stripAffix(tbl, tablePrefix, tableSuffix);
-        if (mappedTableValues.has(norm(tbl)) || matchList(tbl, excludeTables)) return `${kw} TABLE ${schema}${tbl}`;
+        // 매핑 우선 (대소문자 옵션 반영)
+        const mapped = caseSensitive
+          ? tableMap[original]
+          : tableMap[findKeyIgnoreCase(tableMap, original)];
+        if (mapped) return pre + rewrap(mapped, quote);
+        if (mappedTableValues.has(norm(tbl)) || matchList(tbl, excludeTables)) return pre + tok;
+        if (!isIdent(tbl) || isKeyword(tbl)) return pre + tok;
         const affixed = addAffix(original, tablePrefix, tableSuffix);
-        return `${kw} TABLE ${schema}${affixed}`;
+        return pre + rewrap(affixed, quote);
       });
+    }
 
-    // B3. 점 앞(좌) 토큰이 테이블로 쓰이는 경우: TableA.col -> TableAffixed.col
-    s = s.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b(?=\.)/g, (m) => {
-      const tbl = m;
-      const original = stripAffix(tbl, tablePrefix, tableSuffix);
-      if (mappedTableValues.has(norm(tbl)) || matchList(tbl, excludeTables)) return tbl;
-      if (!isIdent(tbl) || isKeyword(tbl)) return tbl;
-      return addAffix(original, tablePrefix, tableSuffix);
-    });
 
-    // --- C) 컬럼 접두/접미사 적용 ---
-    // C1. table.column 형태의 컬럼
-    s = s.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g, (full, left, right) => {
-      // 매핑된 컬럼은 그대로 두고, 아니라면 접두/접미사
-      const isMappedCol = !!(
-        (perTableColMap[stripAffix(left, tablePrefix, tableSuffix)] && perTableColMap[stripAffix(left, tablePrefix, tableSuffix)][right]) ||
-        globalColMap[right]
-      );
-      if (isMappedCol || matchList(right, excludeColumns)) return `${left}.${right}`;
-      return `${left}.${addAffix(stripAffix(right, columnPrefix, columnSuffix), columnPrefix, columnSuffix)}`;
-    });
-
-    // 테이블 토큰 위치 수집: FROM/JOIN/INTO/UPDATE, DDL의 TABLE 다음 식별자
-    const tableTokenPositions = [];
-    const capLastSegment = (baseIndex, matchedWhole, namePart) => {
-      // namePart can be schema.table or table
-      const relStartInWhole = matchedWhole.indexOf(namePart);
-      let start = baseIndex + relStartInWhole;
-      let last = namePart;
-      const dot = namePart.lastIndexOf('.');
-      if (dot !== -1) {
-        start += dot + 1;
-        last = namePart.slice(dot + 1);
-      }
-      const end = start + last.length;
-      tableTokenPositions.push({ start, end });
-    };
-    let m1;
-    const reFromJoin = /\b(FROM|JOIN|INTO|UPDATE)\b\s+((?:[A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)/gi;
-    while ((m1 = reFromJoin.exec(s)) !== null) capLastSegment(m1.index, m1[0], m1[2]);
-    let m2;
-    const reDDL = /\b(CREATE|ALTER|DROP|TRUNCATE)\s+TABLE\b\s+((?:[A-Za-z_][A-Za-z0-9_]*\.)?[A-Za-z_][A-Za-z0-9_]*)/gi;
-    while ((m2 = reDDL.exec(s)) !== null) capLastSegment(m2.index, m2[0], m2[2]);
-
-    // C2. 단독 컬럼 토큰 (키워드/함수/테이블 위치/매핑/제외는 건너뜀)
-    s = replaceIdentifiers(s, (token, offset, str) => {
-      if (isKeyword(token)) return token;
-      const prev = str[offset - 1] || '';
-      const next = str[offset + token.length] || '';
-      // 함수명/점(.) 접합/숫자/파라미터 등 회피
-      if (prev === '.' || next === '.' || next === '(') return token;
-      // 테이블 토큰 위치(이미 affix 적용됨)에서는 컬럼 affix 금지
-      if (tableTokenPositions.some(({ start, end }) => offset >= start && offset < end)) return token;
-      if (matchList(token, excludeColumns)) return token;
-      // 이미 매핑된 컬럼명이라면 그대로 둠
-      const isMapped = findInValueMap(uniqueColMap, token, caseSensitive) || findInValueNested(perTableColMap, token, caseSensitive);
-      if (isMapped) return token;
-      return addAffix(stripAffix(token, columnPrefix, columnSuffix), columnPrefix, columnSuffix);
-    });
+    // 컬럼 관련 기능은 제거됨
 
     return s;
   };
 
+  if (process && process.env && process.env.DEBUG_SQL_TRANSFORM) {
+    console.log('DBG segments count', segments.length);
+    segments.forEach((seg, i) => console.log('DBG seg', i, seg.type, JSON.stringify(seg.text)));
+  }
   return segments.map(seg => seg.type === 'code' ? process(seg.text) : seg.text).join('');
 }
 
@@ -218,24 +180,6 @@ export function transformSqlNames(sql, opts = {}) {
 function findKeyIgnoreCase(map, key) {
   const k = Object.keys(map).find((x) => x.toLowerCase() === key.toLowerCase());
   return k ?? key;
-}
-
-function findInValueMap(map, val, caseSensitive) {
-  const n = caseSensitive ? val : val.toLowerCase();
-  for (const v of Object.values(map)) {
-    if ((caseSensitive ? v : v.toLowerCase()) === n) return true;
-  }
-  return false;
-}
-
-function findInValueNested(nested, val, caseSensitive) {
-  const n = caseSensitive ? val : val.toLowerCase();
-  for (const m of Object.values(nested)) {
-    for (const v of Object.values(m)) {
-      if ((caseSensitive ? v : v.toLowerCase()) === n) return true;
-    }
-  }
-  return false;
 }
 
 function replaceIdentifiers(str, replacer) {
@@ -271,26 +215,8 @@ function splitSqlSegments(sql) {
       pushSkip(i);
       continue;
     }
-    // 대괄호 식별자 [ ... ]
-    if (ch === '[') {
-      pushCode(i);
-      const j = sql.indexOf(']', i + 1);
-      i = j === -1 ? len : j + 1;
-      pushSkip(i);
-      continue;
-    }
-    // 백틱 `...`
-    if (ch === '`') {
-      pushCode(i);
-      let j = i + 1;
-      while (j < len) {
-        if (sql[j] === '`') { j++; break; }
-        j++;
-      }
-      i = j;
-      pushSkip(i);
-      continue;
-    }
+    // 식별자 인용자(대괄호/백틱/큰따옴표)는 코드로 유지하여 처리 대상에 포함
+    // - 문자열 리터럴('...')과 주석만 skip 처리
     // 작은따옴표 '...'
     if (ch === '\'') {
       pushCode(i);
@@ -304,19 +230,7 @@ function splitSqlSegments(sql) {
       pushSkip(i);
       continue;
     }
-    // 큰따옴표 "..."
-    if (ch === '"') {
-      pushCode(i);
-      let j = i + 1;
-      while (j < len) {
-        if (sql[j] === '"' && sql[j + 1] === '"') { j += 2; continue; } // "" 이스케이프
-        if (sql[j] === '"') { j++; break; }
-        j++;
-      }
-      i = j;
-      pushSkip(i);
-      continue;
-    }
+    // 큰따옴표는 Postgres 등에서 식별자 인용으로 쓰이므로 skip하지 않음
 
     i++;
   }

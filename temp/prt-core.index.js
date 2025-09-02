@@ -2,6 +2,7 @@ import { SQLContext } from '../src/sql-context.js';
 import { prt_master } from './prt-master.table.js';
 import ctx_sto_core from './sto-core.index.js';
 import { sql } from 'kysely';
+import { transformSqlNames } from '../src/util/transform-sql-name.js';
 
 const ctx_prt_core = new SQLContext();
 // ctx_prt_core.addTable(prt_master);
@@ -19,13 +20,29 @@ ctx_prt_core.qry.add('getMaxPrtId', async () => {
 });
 
 ctx_prt_core.qry.add('getMaxPrtId2', async () => {
-    const row = await sql`
-        SELECT MAX("c_prt_id_x") AS "max_prt_id"
-        FROM "pre_prt_master_suf";
-    `.execute(ctx_prt_core.db);
+    // const result = await sql`
+    //     SELECT MAX("prt_id") AS "max_prt_id"
+    //     FROM "pre_prt_master_suf";
+    // `.execute(ctx_prt_core.db);
 
-//   return row?.max_prt_id ?? null;
-  return row?.rows?.[0]?.max_prt_id ?? null;
+    let query = `
+        SELECT MAX("prt_id") AS "max_prt_id"
+        FROM "prt_master";
+    `;
+    query = transformSqlNames(query, {
+      // tableMap: { prt_master: 't_prt' },
+      tableMap: { sto_master: 't_store' },
+      tablePrefix: 'pre_',
+      tableSuffix: '_suf',
+    });
+
+    // const result = await sql.raw(query).execute(ctx_prt_core.db);
+    const result = await sql`${query}`.execute(ctx_prt_core.db);
+
+    // const result = await ctx_prt_core.db.raw(query).execute();
+    // const result = await ctx_prt_core.db.executeQuery(q.compile(ctx.db));
+    //   return row?.max_prt_id ?? null;
+    return result?.rows?.[0]?.max_prt_id ?? null;
 });
 
 

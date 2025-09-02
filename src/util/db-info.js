@@ -26,15 +26,41 @@ export function inferDbKind(dialect) {
 export function getVersionQuery(kind) {
   switch (kind) {
     case 'sqlite':
-      return sql`SELECT sqlite_version() AS version`;
+      return sql`SELECT sqlite_version() AS version, 'sqlite' AS comment`;
     case 'mysql':
-      return sql`SELECT VERSION() AS version`;
+      // MySQL/MariaDB: 버전 + 코멘트(벤더 정보)
+      return sql`SELECT @@version AS version, @@version_comment AS comment`;
     case 'postgres':
-      return sql`SELECT version() AS version`;
+      // Postgres: 노이즈 없는 순수 버전, 코멘트는 비움
+      return sql`SELECT current_setting('server_version') AS version, NULL::text AS comment`;
     case 'mssql':
       return sql`SELECT @@VERSION AS version`;
     default:
       return sql`SELECT 'unknown' AS version`;
+  }
+}
+
+function detectFlavor(kind, rawResult, versionStr) {
+  try {
+    if (kind !== 'mysql') return null;
+
+    // 우선 comment 컬럼
+    let comment = null;
+    if (rawResult?.rows?.length) comment = rawResult.rows[0]?.comment ?? null;
+    if (!comment && Array.isArray(rawResult) && rawResult.length) {
+      const row = rawResult[0];
+      if (row && typeof row === 'object') comment = row.comment ?? null;
+    }
+
+    const hay = `${versionStr || ''} ${(comment || '')}`.toLowerCase();
+    if (hay.includes('mariadb')) return 'mariadb';
+    // MariaDB는 보통 10.x 버전 체계를 사용
+    const [M] = String(versionStr || '').split('.');
+    const major = parseInt(M || '0', 10) || 0;
+    if (major >= 10) return 'mariadb';
+    return 'mysql';
+  } catch (_) {
+    return null;
   }
 }
 
@@ -109,6 +135,7 @@ export async function detectAndStoreDbInfo(ctx, opt = {}) {
     kind,                       // 'sqlite' | 'mysql' | 'postgres' | 'mssql' | 'unknown'
     version,                    // 예: '3.44.2', '8.0.36', 'Microsoft SQL Server 2019...' 등
     detectedAt: new Date().toISOString(),
+    flavor: detectFlavor(kind, rawResult, version) // mysql 계열일 때 'mysql' | 'mariadb'
   };
 
   ctx.__dbInfo = info;

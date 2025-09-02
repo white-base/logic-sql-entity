@@ -16,10 +16,7 @@ ctx_prt_core.connect = {
         new PrefixSuffixPlugin({
             tablePrefix: 'pre_',
             tableSuffix: '_suf',
-            columnPrefix: 'c_',
-            columnSuffix: '_x',
             tableMap: { sto_master: 't_store' },
-            columnMap: { sto_master: { sto_name: 'store_name' }},
             excludeTables: ['sqlite_master', /^sqlite_/i]
         })
     ]
@@ -58,8 +55,8 @@ console.log('prt_master:', sto_master2[0]);
 const maxId = await ctx_prt_core.qry['getMaxPrtId']();
 console.log('Max prt_id:', maxId);
 
-const maxId2 = await ctx_prt_core.qry['getMaxPrtId2']();
-console.log('Max prt_id2:', maxId2);
+// const maxId2 = await ctx_prt_core.qry['getMaxPrtId2']();
+// console.log('Max prt_id2:', maxId2);
 
 
 import { detectAndStoreDbInfo } from '../src/util/db-info.js';
@@ -70,15 +67,16 @@ console.log('info ', info);
 import { transformSqlNames } from '../src/util/transform-sql-name.js';
 
 const opts = {
-  tableMap: { prt_master: 't_prt' },
-  columnMap: { prt_master: { prt_name: 'name' } },
+  tableMap: { sto_master: 't_store' },
   tablePrefix: 'pre_',
   tableSuffix: '_suf',
-  columnPrefix: 'c_',
-  columnSuffix: '_x'
 };
 
-const sql = 'SELECT prt_id, prt_name FROM prt_master WHERE prt_id > 0';
+// const sql = 'SELECT prt_id, prt_name FROM prt_master WHERE prt_id > 0';
+const sql = `
+        SELECT MAX("prt_id") AS "max_prt_id"
+        FROM "prt_master";
+    `;
 const result = transformSqlNames(sql, opts);
 console.log(result);
 
