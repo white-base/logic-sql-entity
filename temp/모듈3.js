@@ -26,6 +26,7 @@ ctx_prt_core.connect = {
 };
 // #################################
 
+await ctx_prt_core.init();
 
 await ctx_prt_core.createSchema();
 console.log(ctx_prt_core);
@@ -37,72 +38,54 @@ const tables = await dbNoPlugin
   .select(['name', 'type'])
   .where('type', '=', 'table')
   .execute();
-console.log('Tables:', tables[0]);
+console.log('Tables:', tables);
 
-await ctx_prt_core.db
-  .insertInto('sto_master')
-  .values({ sto_name: 'Logic Store' })
-  .execute();
-const sto_master2 = await ctx_prt_core.db
-  .selectFrom('sto_master')
-  .select(['sto_name', 'sto_id'])
-  .execute();
-console.log('sto_master2:', sto_master2[0]);
 
 await ctx_prt_core.db
   .insertInto('prt_master')
   .values({ prt_name: 'Logic Store' })
   .execute();
-const sto_master3 = await ctx_prt_core.db
+await ctx_prt_core.db
+  .insertInto('prt_master')
+  .values({ prt_name: 'Logic Store2' })
+  .execute();  
+const sto_master2 = await ctx_prt_core.db
   .selectFrom('prt_master')
   .select(['prt_name', 'prt_id'])
   .execute();
-console.log('sto_master3:', sto_master3[0]);
+console.log('prt_master:', sto_master2[0]);
 
-for(const aa in ctx_prt_core.tables) {
-  console.log('tables: ' + aa);
-}
+const maxId = await ctx_prt_core.qry['getMaxPrtId']();
+console.log('Max prt_id:', maxId);
 
-for(const aa in ctx_prt_core.tables[0].cols) {
-  console.log('cols: ', aa);
-}
-
-ctx_prt_core.tables[0].rows.add({ prt_name: 'Another Store', prt_id: 2 });
-
-for(const aa in ctx_prt_core.tables[0].rows) {
-  console.log('rows: ', aa);
-}
-
-for(const aa in ctx_prt_core.tables[0].rows[0]) {
-  console.log('row: ', aa);
-}
-
-for(const aa in ctx_prt_core.tables[0].cols[0]) {
-  console.log('col[0]: ', aa);
-}
+const maxId2 = await ctx_prt_core.qry['getMaxPrtId2']();
+console.log('Max prt_id2:', maxId2);
 
 
-for(const aa of ctx_prt_core.tables.entries()) {
-  console.log('tables: ' + aa);
-}
+import { detectAndStoreDbInfo } from '../src/util/db-info.js';
 
-for(const [i, aa] of ctx_prt_core.tables.entries()) {
-  console.log('tables: ' + aa + ' (index: ' + i + ')');
-}
+const info = await detectAndStoreDbInfo(ctx_prt_core);
+console.log('info ', info);
 
+import { transformSqlNames } from '../src/util/transform-sql-name.js';
 
-// for(const aa of ctx_prt_core.tables) {
-//   console.log(aa);
-// }
+const opts = {
+  tableMap: { prt_master: 't_prt' },
+  columnMap: { prt_master: { prt_name: 'name' } },
+  tablePrefix: 'pre_',
+  tableSuffix: '_suf',
+  columnPrefix: 'c_',
+  columnSuffix: '_x'
+};
 
-for (const v of [10, 20, 30]) {
-  console.log(v);
-}
+const sql = 'SELECT prt_id, prt_name FROM prt_master WHERE prt_id > 0';
+const result = transformSqlNames(sql, opts);
+console.log(result);
 
-// 인덱스가 필요하면
-for (const [i, v] of [10, 20, 30].entries()) {
-  console.log(i, v);
-}
+const sql2 = 'SELECT prt_id, prt_name FROM sto_master WHERE prt_id > 0';
+const result2 = transformSqlNames(sql2, opts);
+console.log(result2);
 
+// 매핑된 테이블/컬럼은 그대로, 나머지는 prefix/suffix 적용
 
 console.log(0);
