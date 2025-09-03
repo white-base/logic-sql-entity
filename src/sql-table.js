@@ -69,8 +69,7 @@ class SQLTable extends MetaTable {
         let tableBuilder = db.schema.createTable(this.tableName);
         // 컬렉션 키 기준으로 안전하게 순회
         const colKeys = this.columns.$keys ?? Object.keys(this.columns);
-        for (const key of colKeys) {
-            const col = this.columns[key];
+        for (const col of colKeys) {
             if (!col) continue;
             const options = normalizeOptions(col);
             const name = (typeof col.name === 'string' && col.name) ? col.name : key;
