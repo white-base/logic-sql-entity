@@ -10,6 +10,9 @@ import { sql } from 'kysely';
 import { detectAndStoreDbInfo } from './util/db-info.js';
 import { resolveDbFeatures } from './util/db-features.js';
 
+// REVIEW: 개발후 제거
+import { viewTable } from '../temp/view-table.js';
+
 class SQLContext extends MetaObject {
     constructor() {
         super();
@@ -95,36 +98,35 @@ class SQLContext extends MetaObject {
             const sdb = this.db.withSchema(testDb);
 
             
-            // try {
-                sdb.transaction().execute(async (trx) => {
-                    await trx.schema.createTable('users')
-                        .addColumn('id', 'integer', col => col.primaryKey().autoIncrement())
-                        .execute();
-                    
-                    await this.createSchema(trx);
+            await sdb.transaction().execute(async (trx) => {
+                // await trx.schema.createTable('users')
+                //     .addColumn('id', 'integer', col => col.primaryKey().autoIncrement())
+                //     .execute();
+                
+                await this.createSchema(trx, testDb);
 
-                    // TODO: dropSchema(trx); 추가 필요
+                // TODO: dropSchema(trx); 추가 필요
 
-                    throw { rollback: true };
-                    // throw new Error('Schema creation should have failed due to missing tables.');
-                }).catch(msg => {
-                    // 여기서 에러 처리
-                    // console.warn('테이블 생성 에러:', error);
-                    console.log('테이블 생성 에러:', msg);
-                });
-            // }
+                // 처리완료
+                // await viewTable(sdb, '생성 검사 후 > 테이블 목록');
+                await viewTable(trx, '생성 검사 후 > 테이블 목록');
+                //
+                throw { rollback: true };
+                // throw new Error('Schema creation should have failed due to missing tables.');
+            }).catch(msg => {
+                // 여기서 에러 처리
+                // console.warn('테이블 생성 에러:', error);
+                if (msg && msg.rollback) {
+                    console.log('테이블 생성 성공: ', msg);
+                } else {
+                    console.error('테이블 생성 에러:', msg);
+                }
+            });
+            await viewTable(sdb, '롤백 후 > 테이블 목록');
 
-
-            const tables = await sdb.selectFrom('sqlite_master')
-                .select(['name', 'type'])
-                .where('type', '=', 'table')
-                .execute();
-            console.log('sub Tables:', JSON.stringify(tables, null, 2));
-            
-            console.log(0);
 
         } else if (this.profile.vendor === 'mysql') {
-            // MySQL에 대한 검증 로직 추가
+            // MySQL에 대한 검증 로직 추가 TODO:
             await sql`CREATE DATABASE IF NOT EXISTS \`appdb\``.execute(this.db);
             // 풀 생성 시 database:'appdb' 지정 권장
             const mdb = this.db.withSchema('appdb'); // 멀티-벤더 호환 위해 사용 가능
@@ -133,7 +135,7 @@ class SQLContext extends MetaObject {
                 .execute();
 
         } else if (this.profile.vendor === 'postgres') {
-            // PostgreSQL에 대한 검증 로직 추가
+            // PostgreSQL에 대한 검증 로직 추가 TODO:
             await sql`CREATE SCHEMA IF NOT EXISTS "app"`.execute(this.db);
             const pdb = this.db.withSchema('app');
             await pdb.schema.createTable('users')
@@ -142,13 +144,13 @@ class SQLContext extends MetaObject {
 
         } else if (this.profile.vendor === 'mssql') {
             await sql`CREATE DATABASE IF NOT EXISTS \`appdb\``.execute(this.db);
-            // 풀 생성 시 database:'appdb' 지정 권장
+            // 풀 생성 시 database:'appdb' 지정 권장 TODO:
             const mdb = this.db.withSchema('appdb'); // 멀티-벤더 호환 위해 사용 가능
             await mdb.schema.createTable('users')
                 .addColumn('id', 'int', col => col.primaryKey().autoIncrement())
                 .execute();
         } else if (this.profile.vendor === 'maria') {
-            // MariaDB에 대한 검증 로직 추가
+            // MariaDB에 대한 검증 로직 추가 TODO:
             await sql`CREATE DATABASE IF NOT EXISTS \`appdb\``.execute(this.db);
             // 풀 생성 시 database:'appdb' 지정 권장
             const mdb = this.db.withSchema('appdb'); // 멀티-벤더 호환 위해 사용 가능
@@ -158,7 +160,7 @@ class SQLContext extends MetaObject {
         }
     }
 
-    async createSchema(dbOrTrx = null) {
+    async createSchema(dbOrTrx = null, schemaName = null) {
         /**
          * 우선순위
          * 1. 하위 스키마 실행
@@ -173,30 +175,30 @@ class SQLContext extends MetaObject {
         // If not in a transaction, start one
         if (db && db.constructor && db.constructor.name === 'Kysely') {
             await db.transaction().execute(async (trx) => {
-                await this._createSchemaRecursive(trx);
+                await this._createSchemaRecursive(trx, schemaName);
             });
         } else {
             // Already in a transaction (trx)
-            await this._createSchemaRecursive(db);
+            await this._createSchemaRecursive(db, schemaName);
         }
         // await this._createSchemaRecursive(db);
 
     }
 
-    async _createSchemaRecursive(trx) {
+    async _createSchemaRecursive(trx, schemaName) {
         for (const [index, ctx] of this.contexts.entries()) {
             if (!ctx) continue;
-            ctx.connect = this.connect;
             if (typeof ctx.createSchema === 'function') {
-                await ctx.createSchema(trx);
+                ctx.connect = this.connect;
+                await ctx.createSchema(trx, schemaName);
             }
         }
 
         for (const [index, table] of this.tables.entries()) {
             if (!table) continue;
-            table.connect = this.connect;
             if (typeof table.create === 'function') {
-                await table.create(trx);
+                table.connect = this.connect;
+                await table.create(trx, schemaName);
             }
         }
     }

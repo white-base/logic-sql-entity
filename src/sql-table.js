@@ -7,6 +7,8 @@ import { SQLColumn }                    from './sql-column.js';
 import { SQLRow }                       from './sql-row.js';
 
 import { Kysely }                       from 'kysely'
+import { sql }                          from 'kysely'
+import { collectIndexGroups }           from './util/collect-index-group.js';
 
 // local funciton
 function _isObject(obj) {    // 객체 여부
@@ -62,24 +64,80 @@ class SQLTable extends MetaTable {
         return this._db;
     }
 
-    async create(trx) {
+    async create(trx, schemaName = null) {
         
         const db = trx || this.db;
 
         let tableBuilder = db.schema.createTable(this.tableName);
-        // 컬렉션 키 기준으로 안전하게 순회
-        const colKeys = this.columns.$keys ?? Object.keys(this.columns);
-        for (const col of colKeys) {
-            if (!col) continue;
+        for (const [key, col] of this.columns.entries()) {
             const options = normalizeOptions(col);
             const name = (typeof col.name === 'string' && col.name) ? col.name : key;
             const type = col.dataType || 'text';
             tableBuilder = tableBuilder.addColumn(name, type, options);
         }
-
         await tableBuilder.execute();
 
+
+        // index creation
+
+        // for (const col of this.columns) {
+        //     await db.schema.createIndex(`idx_${col.name}`)
+        //         .on(this.tableName)
+        //         .column(col.name)
+        //         .execute();
+        // }
+        for (const [key, col] of this.columns.entries()) {
+
+        }
         // TODO: index  생성에 대한 부분 추가 필요
+
+        const indexDefs = collectIndexGroups(this.tableName, this.columns);
+        for (const indexDef of indexDefs) {
+            const isSqlite = this._connect?.dialect?.constructor?.name === 'SqliteDialect';
+
+            if (isSqlite && schemaName) {
+                // SQLite: CREATE INDEX [schema.]index_name ON table (...)
+                // ON "schema"."table" is invalid for SQLite indices.
+                // Build raw SQL with schema on index name, not on the table name.
+
+                // Resolve final table identifier with prefix/suffix or mapping
+                let tableId = this.tableName;
+                const plugins = Array.isArray(this._connect?.plugins) ? this._connect.plugins : [];
+                const ps = plugins.find(p => p && typeof p === 'object' && 'tablePrefix' in p && 'tableSuffix' in p && 'tableMap' in p);
+                if (ps) {
+                    const tname = this.tableName;
+                    if (ps.tableMap && typeof ps.tableMap === 'object' && ps.tableMap[tname]) {
+                        tableId = ps.tableMap[tname];
+                    } else {
+                        const patterns = Array.isArray(ps.excludeTables) ? ps.excludeTables : [];
+                        const match = patterns.some((pat) =>
+                            typeof pat === 'string'
+                                ? (ps.caseSensitive ? tname === pat : tname.toLowerCase() === pat.toLowerCase())
+                                : pat instanceof RegExp
+                                    ? pat.test(tname)
+                                    : false
+                        );
+                        if (!match) {
+                            tableId = (ps.tablePrefix || '') + tname + (ps.tableSuffix || '');
+                        }
+                    }
+                }
+
+                const cols = indexDef.columns.map((c) => sql.id(c));
+                await sql`create index ${sql.id(schemaName, indexDef.name)} on ${sql.id(tableId)} (${sql.join(cols)})`.execute(db);
+            } else {
+                await db.schema
+                    .createIndex(indexDef.name)
+                    .on(this.tableName)
+                    .columns(indexDef.columns)
+                    .execute();
+            }
+        }
+
+        // await db.schema.createIndex('idx_orders_customer')
+        //     .on(this.tableName)
+        //     .column('prt_id')
+        //     .execute();
 
         // inner function
         const chainOptionFns = (fns = []) => (col) => fns.reduce((acc, fn) => fn(acc), col);

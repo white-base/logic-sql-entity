@@ -14,6 +14,7 @@ class SQLColumn extends MetaColumn {
         this._autoInc     = false;
         this._primaryKey  = false;
         this._isVirtual   = false;
+        this._indexes     = [];
         // UI
         this._description = '';
         this._readOnly    = false;
@@ -51,6 +52,14 @@ class SQLColumn extends MetaColumn {
 
     get isVirtual() {
         return this._isVirtual;
+    }
+
+    get indexes() {
+        return this._indexes;
+    }
+
+    set indexes(p_indexes) {
+        this._indexes = p_indexes;
     }
 
     get description() {

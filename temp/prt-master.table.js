@@ -11,6 +11,6 @@ prt_master.columns['prt_id'].dataType = 'integer';
 prt_master.columns['prt_id'].pk = true;
 
 prt_master.columns['prt_name'].dataType = 'text';
-
+prt_master.columns['prt_name'].indexes = ['g1'];
 export default prt_master;
 export { prt_master };

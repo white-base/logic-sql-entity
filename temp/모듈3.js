@@ -1,5 +1,7 @@
 import ctx_prt_core from './prt-core.index.js';
 
+import { viewTable } from './view-table.js';
+
 // #################################
 // DB 연결 설정
 import { SqliteDialect } from 'kysely'
@@ -26,28 +28,16 @@ ctx_prt_core.connect = {
 
 await ctx_prt_core.init();
 
-import { Kysely } from 'kysely';
 await ctx_prt_core.validateDefinition();
+
 try {
     await ctx_prt_core.createSchema();
+    await viewTable(ctx_prt_core.db, '정상적인 테이블 목록');
+
 } catch (error) {
     console.error('Error creating schema:', error);
-    const dbNoPlugin = new Kysely({ dialect: ctx_prt_core.connect.dialect });
-    const tables = await dbNoPlugin.selectFrom('sqlite_master')
-      .select(['name', 'type'])
-      .where('type', '=', 'table')
-      .execute();
-    // console.log('Tables:', tables);
-    console.log('테이블 배열:', JSON.stringify(tables, null, 2));
+    await viewTable(ctx_prt_core.db, 'Error 발생 시 테이블 목록');
 }
-
-const dbNoPlugin = new Kysely({ dialect: ctx_prt_core.connect.dialect });
-const tables = await dbNoPlugin.selectFrom('sqlite_master')
-  .select(['name', 'type'])
-  .where('type', '=', 'table')
-  .execute();
-// console.log('Tables:', tables);
-console.log('테이블 배열:', JSON.stringify(tables, null, 2));
 
 await ctx_prt_core.db.insertInto('prt_master')
   .values({ prt_name: 'Logic Store' })
