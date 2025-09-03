@@ -36,8 +36,8 @@ ctx_prt_core.qry.add('getMaxPrtId2', async () => {
       tableSuffix: '_suf',
     });
 
-    // const result = await sql.raw(query).execute(ctx_prt_core.db);
-    const result = await sql`${query}`.execute(ctx_prt_core.db);
+    const result = await sql.raw(query).execute(ctx_prt_core.db);
+    // const result = await sql`${query}`.execute(ctx_prt_core.db);
 
     // const result = await ctx_prt_core.db.raw(query).execute();
     // const result = await ctx_prt_core.db.executeQuery(q.compile(ctx.db));

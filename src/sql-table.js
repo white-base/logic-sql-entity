@@ -62,9 +62,11 @@ class SQLTable extends MetaTable {
         return this._db;
     }
 
-    async createSchema() {
-        let schema = this.db.schema.createTable(this.tableName);
+    async create(trx) {
+        
+        const db = trx || this.db;
 
+        let tableBuilder = db.schema.createTable(this.tableName);
         // 컬렉션 키 기준으로 안전하게 순회
         const colKeys = this.columns.$keys ?? Object.keys(this.columns);
         for (const key of colKeys) {
@@ -73,10 +75,12 @@ class SQLTable extends MetaTable {
             const options = normalizeOptions(col);
             const name = (typeof col.name === 'string' && col.name) ? col.name : key;
             const type = col.dataType || 'text';
-            schema = schema.addColumn(name, type, options);
+            tableBuilder = tableBuilder.addColumn(name, type, options);
         }
 
-        await schema.execute();
+        await tableBuilder.execute();
+
+        // TODO: index  생성에 대한 부분 추가 필요
 
         // inner function
         const chainOptionFns = (fns = []) => (col) => fns.reduce((acc, fn) => fn(acc), col);

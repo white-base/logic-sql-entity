@@ -1,3 +1,21 @@
+const defaultFeatureSet = {
+  supportsCTE: false,
+  supportsWindow: false,
+  supportsJsonType: false,
+  supportsJsonFuncs: false,
+  enforcesCheck: false,
+  supportsDescIndex: false,
+  hasReturning: false,
+  supportsUpsert: false,
+  supportsGeneratedCols: false,
+  supportsOutput: false,
+  supportsCreateOrAlter: false,
+  supportsOffsetFetch: false
+};
+
+function mergeFeatures(vendorFeatures) {
+  return { ...defaultFeatureSet, ...vendorFeatures };
+}
 // ================= MySQL =================
 const parseMySqlStyleVersion = (version = '') => {
   const [M, m, t] = String(version).split('.').map(x => parseInt(x || '0', 10));
@@ -18,14 +36,14 @@ const parseMySqlStyleVersion = (version = '') => {
 export const resolveMySqlFeatures = (version = '') => {
   const { gte } = parseMySqlStyleVersion(version);
 
-  return {
+  return mergeFeatures({
     supportsCTE: gte(8, 0, 0),
     supportsWindow: gte(8, 0, 0),
     supportsJsonType: gte(5, 7, 8),     // 5.7.8+
     enforcesCheck: gte(8, 0, 16),       // 8.0.16+
     supportsDescIndex: gte(8, 0, 13),   // 8.0.13+
     hasReturning: false                 // X (일부 MariaDB는 가능)
-  };
+  });
 };
 
 // ================= MariaDB =================
@@ -40,8 +58,7 @@ export const isMariaDbVersion = (version = '') => {
 
 export const resolveMariaDbFeatures = (version = '') => {
   const { gte } = parseMySqlStyleVersion(version);
-  return {
-    // MariaDB diverges from MySQL in several areas
+  return mergeFeatures({
     supportsCTE: gte(10, 2, 1),         // 10.2.1+
     supportsWindow: gte(10, 2, 0),      // 10.2+
     supportsJsonType: false,            // No native JSON type
@@ -50,20 +67,20 @@ export const resolveMariaDbFeatures = (version = '') => {
     supportsDescIndex: false,           // Historically ignored; be conservative
     hasReturning: gte(10, 5, 0),        // DML RETURNING 10.5+
     supportsGeneratedCols: gte(10, 2, 0)
-  };
+  });
 };
 
 // ================= SQL Server =================
 export const resolveSqlServerFeatures = (version = '') => {
   const major = parseInt((version.split('.')[0] || '0'), 10) || 0;
 
-  return {
+  return mergeFeatures({
     supportsCTE: major >= 9,            // 2005+
     supportsOutput: major >= 9,         // 2005+
     supportsJsonFuncs: major >= 13,     // 2016+
     supportsCreateOrAlter: major >= 13, // 2016+
     supportsOffsetFetch: major >= 11    // 2012+
-  };
+  });
 };
 
 // ================= PostgreSQL =================
@@ -74,7 +91,7 @@ export const resolvePostgresFeatures = (version = '') => {
 
   const gte = (a, b) => (major > a) || (major === a && minor >= b);
 
-  return {
+  return mergeFeatures({
     supportsCTE: gte(8, 4),             // 8.4+
     supportsWindow: gte(8, 4),          // 8.4+
     supportsJsonType: gte(9, 2),        // JSON 9.2+, JSONB 9.4+
@@ -83,7 +100,7 @@ export const resolvePostgresFeatures = (version = '') => {
     hasReturning: gte(8, 2),             // 8.2+
     supportsUpsert: gte(9, 5),           // ON CONFLICT 9.5+
     supportsGeneratedCols: gte(12, 0)    // 12.0+
-  };
+  });
 };
 
 // ================= SQLite =================
@@ -100,7 +117,7 @@ export const resolveSqliteFeatures = (version = '') => {
     return patch >= c;
   };
 
-  return {
+  return mergeFeatures({
     supportsCTE: gte(3, 8, 3),          // 3.8.3+
     supportsWindow: gte(3, 25, 0),      // 3.25.0+
     supportsJsonFuncs: gte(3, 38, 0),   // 3.38.0+ (JSON functions)
@@ -108,7 +125,7 @@ export const resolveSqliteFeatures = (version = '') => {
     supportsDescIndex: true,             // 항상 지원
     hasReturning: gte(3, 35, 0),        // 3.35.0+ RETURNING 지원
     supportsGeneratedCols: gte(3, 31, 0) // 3.31.0+
-  };
+  });
 };
 
 export const resolveDbFeatures = (kind = 'unknown', version = '') => {

@@ -5,6 +5,8 @@ import { PropertyCollection } from 'logic-entity';
 import { MetaTableCollection } from 'logic-entity';
 
 import { Kysely }                       from 'kysely';
+import { sql } from 'kysely';
+
 import { detectAndStoreDbInfo } from './util/db-info.js';
 import { resolveDbFeatures } from './util/db-features.js';
 
@@ -77,7 +79,86 @@ class SQLContext extends MetaObject {
         this._profile = p;
     }
 
-    async createSchema() {
+    async init() {
+        const info = await detectAndStoreDbInfo(this);
+        this.profile.vendor = info.kind;
+        this.profile.version = info.version;
+        this.profile.features = await resolveDbFeatures(info.kind, info.version);
+    }
+
+    async validateDefinition(testDb = 'testdb') {
+        // TODO: 정의 검증 로직 추가
+        if (this.profile.vendor === 'sqlite') {
+            // SQLite에 대한 검증 로직 추가
+            // await sql`ATTACH DATABASE 'file:sub.db' AS sub`.execute(db);
+            await sql`ATTACH DATABASE ':memory:' AS ${testDb}`.execute(this.db);
+            const sdb = this.db.withSchema(testDb);
+
+            
+            // try {
+                sdb.transaction().execute(async (trx) => {
+                    await trx.schema.createTable('users')
+                        .addColumn('id', 'integer', col => col.primaryKey().autoIncrement())
+                        .execute();
+                    
+                    await this.createSchema(trx);
+
+                    // TODO: dropSchema(trx); 추가 필요
+
+                    throw { rollback: true };
+                    // throw new Error('Schema creation should have failed due to missing tables.');
+                }).catch(msg => {
+                    // 여기서 에러 처리
+                    // console.warn('테이블 생성 에러:', error);
+                    console.log('테이블 생성 에러:', msg);
+                });
+            // }
+
+
+            const tables = await sdb.selectFrom('sqlite_master')
+                .select(['name', 'type'])
+                .where('type', '=', 'table')
+                .execute();
+            console.log('sub Tables:', JSON.stringify(tables, null, 2));
+            
+            console.log(0);
+
+        } else if (this.profile.vendor === 'mysql') {
+            // MySQL에 대한 검증 로직 추가
+            await sql`CREATE DATABASE IF NOT EXISTS \`appdb\``.execute(this.db);
+            // 풀 생성 시 database:'appdb' 지정 권장
+            const mdb = this.db.withSchema('appdb'); // 멀티-벤더 호환 위해 사용 가능
+            await mdb.schema.createTable('users')
+                .addColumn('id', 'int', col => col.primaryKey().autoIncrement())
+                .execute();
+
+        } else if (this.profile.vendor === 'postgres') {
+            // PostgreSQL에 대한 검증 로직 추가
+            await sql`CREATE SCHEMA IF NOT EXISTS "app"`.execute(this.db);
+            const pdb = this.db.withSchema('app');
+            await pdb.schema.createTable('users')
+                .addColumn('id', 'serial', col => col.primaryKey())
+                .execute();            
+
+        } else if (this.profile.vendor === 'mssql') {
+            await sql`CREATE DATABASE IF NOT EXISTS \`appdb\``.execute(this.db);
+            // 풀 생성 시 database:'appdb' 지정 권장
+            const mdb = this.db.withSchema('appdb'); // 멀티-벤더 호환 위해 사용 가능
+            await mdb.schema.createTable('users')
+                .addColumn('id', 'int', col => col.primaryKey().autoIncrement())
+                .execute();
+        } else if (this.profile.vendor === 'maria') {
+            // MariaDB에 대한 검증 로직 추가
+            await sql`CREATE DATABASE IF NOT EXISTS \`appdb\``.execute(this.db);
+            // 풀 생성 시 database:'appdb' 지정 권장
+            const mdb = this.db.withSchema('appdb'); // 멀티-벤더 호환 위해 사용 가능
+            await mdb.schema.createTable('users')
+                .addColumn('id', 'int', col => col.primaryKey().autoIncrement())
+                .execute();
+        }
+    }
+
+    async createSchema(dbOrTrx = null) {
         /**
          * 우선순위
          * 1. 하위 스키마 실행
@@ -85,27 +166,39 @@ class SQLContext extends MetaObject {
          * 2.2 인덱스 생성
          * 2.3 제약 조건 생성
          */
+        const db = dbOrTrx || this.db;
 
         // TODO: DB 연결 검사
 
-        // 하위 스키마 실행 (순차적으로 대기)
-        const childContexts = [];
-        this.contexts.forEach((ctx) => childContexts.push(ctx));
-        for (const ctx of childContexts) {
+        // If not in a transaction, start one
+        if (db && db.constructor && db.constructor.name === 'Kysely') {
+            await db.transaction().execute(async (trx) => {
+                await this._createSchemaRecursive(trx);
+            });
+        } else {
+            // Already in a transaction (trx)
+            await this._createSchemaRecursive(db);
+        }
+        // await this._createSchemaRecursive(db);
+
+    }
+
+    async _createSchemaRecursive(trx) {
+        for (const [index, ctx] of this.contexts.entries()) {
             if (!ctx) continue;
             ctx.connect = this.connect;
-            await ctx.createSchema();
+            if (typeof ctx.createSchema === 'function') {
+                await ctx.createSchema(trx);
+            }
         }
 
-        // 테이블 생성 (순차적으로 대기)
-        const childTables = [];
-        this.tables.forEach((tbl) => childTables.push(tbl));
-        for (const table of childTables) {
+        for (const [index, table] of this.tables.entries()) {
             if (!table) continue;
             table.connect = this.connect;
-            await table.createSchema();
+            if (typeof table.create === 'function') {
+                await table.create(trx);
+            }
         }
-
     }
 
     dropSchema() {
@@ -124,17 +217,9 @@ class SQLContext extends MetaObject {
         // Compare the current schema with the database schema
     }
 
-
     // addTable(table) {
     //     this.tables.addValue(table.name, table);
     // }
-
-    async init() {
-        const info = await detectAndStoreDbInfo(this);
-        this.profile.vendor = info.kind;
-        this.profile.version = info.version;
-        this.profile.features = await resolveDbFeatures(info.kind, info.version);
-    }
 }
 
 export default SQLContext;
