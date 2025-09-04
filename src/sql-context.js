@@ -190,6 +190,7 @@ class SQLContext extends MetaObject {
             if (!ctx) continue;
             if (typeof ctx.createSchema === 'function') {
                 ctx.connect = this.connect;
+                ctx.profile = this.profile;
                 await ctx.createSchema(trx, schemaName);
             }
         }
@@ -198,6 +199,7 @@ class SQLContext extends MetaObject {
             if (!table) continue;
             if (typeof table.create === 'function') {
                 table.connect = this.connect;
+                table.profile = this.profile;
                 await table.create(trx, schemaName);
             }
         }
