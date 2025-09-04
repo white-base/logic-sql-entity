@@ -71,7 +71,7 @@ class SQLTable extends MetaTable {
         this._profile = p;
     }
 
-    async create(trx, schemaName = null) {
+    async create(trx) {
         
         const db = trx || this.db;
 
@@ -91,52 +91,10 @@ class SQLTable extends MetaTable {
             // const isSqlite = this._connect?.dialect?.constructor?.name === 'SqliteDialect';
             
             if (this.profile.vendor === 'sqlite') {
-                if (schemaName) {
-                    // 함수형으로 테이블 이름 결정 REVIEW: 변경 검토
-                    // SQLite: CREATE INDEX [schema.]index_name ON table (...)
-                    // ON "schema"."table" is invalid for SQLite indices.
-                    // Build raw SQL with schema on index name, not on the table name.
-                    const resolveTableId = ({ tableName, plugins }) => {
-                        const ps = plugins.find(p => p && typeof p === 'object' && 'tablePrefix' in p && 'tableSuffix' in p && 'tableMap' in p);
-                        if (!ps) return tableName;
-                        const tname = tableName;
-                        if (ps.tableMap && typeof ps.tableMap === 'object' && ps.tableMap[tname]) {
-                            return ps.tableMap[tname];
-                        }
-                        const patterns = Array.isArray(ps.excludeTables) ? ps.excludeTables : [];
-                        const match = patterns.some((pat) =>
-                            typeof pat === 'string'
-                                ? (ps.caseSensitive ? tname === pat : tname.toLowerCase() === pat.toLowerCase())
-                                : pat instanceof RegExp
-                                    ? pat.test(tname)
-                                    : false
-                        );
-                        if (!match) {
-                            return (ps.tablePrefix || '') + tname + (ps.tableSuffix || '');
-                        }
-                        return tname;
-                    };
-
-                    const tableId = resolveTableId({
-                        tableName: this.tableName,
-                        plugins: Array.isArray(this._connect?.plugins) ? this._connect.plugins : []
-                    });
-
-                    const cols = indexDef.columns.map((c) => sql.id(c));
-                    await sql`create index ${sql.id(schemaName, indexDef.name)} on ${sql.id(tableId)} (${sql.join(cols)})`.execute(db);
-
-                    // SQLite에서는 CREATE INDEX 문에서 스키마 이름을 사용할 수 없습니다.
-                    // 따라서 인덱스 이름에만 스키마 이름을 사용하고, 테이블 이름은 그대로 사용합니다.
-                    // await db.withSchema('testdb').schema.createIndex(indexDef.name)
-                    //     .on(this.tableName)
-                    //     .columns(indexDef.columns)
-                    //     .execute();
-                } else {
-                    await db.schema.createIndex(indexDef.name)
-                        .on(this.tableName)
-                        .columns(indexDef.columns)
-                        .execute();
-                }
+                await db.schema.createIndex(indexDef.name)
+                    .on(this.tableName)
+                    .columns(indexDef.columns)
+                    .execute();
             }
         }
 

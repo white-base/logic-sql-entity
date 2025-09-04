@@ -28,7 +28,22 @@ ctx_prt_core.connect = {
 
 await ctx_prt_core.init();
 
-await ctx_prt_core.validateDefinition();
+// await ctx_prt_core.validateDefinition(); // 실제 DB에 반영하기 전에 정의 검사
+// await ctx_prt_core.validateDefinition(ctx_prt_core.connect); // 임시 DB 연결로 검사 
+await ctx_prt_core.validateDefinition({
+    dialect: new SqliteDialect({
+        // database: new Database(':memory:')
+        database: new Database('validate.sqlite')  // 로컬에 파일로 생성
+    }),
+    plugins: [ 
+        new PrefixSuffixPlugin({
+            tablePrefix: 'pre_',
+            tableSuffix: '_suf',
+            tableMap: { sto_master: 't_store' },
+            excludeTables: ['sqlite_master', /^sqlite_/i]
+        })
+    ]
+}); // 임시 DB 연결로 검사 
 
 try {
     await ctx_prt_core.createSchema();

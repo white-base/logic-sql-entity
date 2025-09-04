@@ -11,12 +11,13 @@ export async function viewTable(ctx, title = '테이블 목록') {
     // console.log('Tables:', tables);
 
     var tableNames = tables.map(table => table.name);
-    console.log(`${title}:`, JSON.stringify(tableNames, null, 2));
+    console.log(`${title}:`, tableNames.join(', '));
 
     const indexes = await dbNoPlugin.selectFrom('sqlite_master')
         .select(['name', 'type'])
         .where('type', '=', 'index')
         .execute();
     var indexNames = indexes.map(index => index.name);
-    console.log(`${title} 인덱스:`, JSON.stringify(indexNames, null, 2));
+
+    console.log(`${title} 인덱스:`, indexNames.join(', '));
 }

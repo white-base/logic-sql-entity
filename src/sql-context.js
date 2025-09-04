@@ -89,28 +89,42 @@ class SQLContext extends MetaObject {
         this.profile.features = await resolveDbFeatures(info.kind, info.version);
     }
 
-    async validateDefinition(testDb = 'testdb') {
+    async validateDefinition(dbOrConn = null) {
+
+        let db = null;
+
+        if (typeof dbOrConn === 'object' && dbOrConn?.dialect) {
+            db = new Kysely(dbOrConn);
+        } else {
+            db = dbOrConn || this.db;
+        }
+
         // TODO: 정의 검증 로직 추가
         if (this.profile.vendor === 'sqlite') {
             // SQLite에 대한 검증 로직 추가
             // await sql`ATTACH DATABASE 'file:sub.db' AS sub`.execute(db);
-            await sql`ATTACH DATABASE ':memory:' AS ${testDb}`.execute(this.db);
-            const sdb = this.db.withSchema(testDb);
-
             
-            await sdb.transaction().execute(async (trx) => {
+            // await sql`ATTACH DATABASE ':memory:' AS ${testDb}`.execute(this.db);
+
+
+            // const sdb = this.db.withSchema(testDb);
+
+            await db.transaction().execute(async (trx) => {
                 // await trx.schema.createTable('users')
                 //     .addColumn('id', 'integer', col => col.primaryKey().autoIncrement())
                 //     .execute();
-                
-                await this.createSchema(trx, testDb);
+
+                await this.createSchema(trx);
 
                 // TODO: dropSchema(trx); 추가 필요
 
                 // 처리완료
                 // await viewTable(sdb, '생성 검사 후 > 테이블 목록');
-                await viewTable(trx, '생성 검사 후 > 테이블 목록');
-                //
+                await viewTable(trx, '검사 > 생성 후 > 테이블 목록');
+
+                await this.dropSchema(trx);
+                await viewTable(trx, '검사 > 삭제 후 > 테이블 목록');
+                
                 throw { rollback: true };
                 // throw new Error('Schema creation should have failed due to missing tables.');
             }).catch(msg => {
@@ -122,8 +136,7 @@ class SQLContext extends MetaObject {
                     console.error('테이블 생성 에러:', msg);
                 }
             });
-            await viewTable(sdb, '롤백 후 > 테이블 목록');
-
+            await viewTable(db, '검사 > 롤백 후 > 테이블 목록');
 
         } else if (this.profile.vendor === 'mysql') {
             // MySQL에 대한 검증 로직 추가 TODO:
@@ -160,7 +173,7 @@ class SQLContext extends MetaObject {
         }
     }
 
-    async createSchema(dbOrTrx = null, schemaName = null) {
+    async createSchema(dbOrConn = null) {
         /**
          * 우선순위
          * 1. 하위 스키마 실행
@@ -168,45 +181,81 @@ class SQLContext extends MetaObject {
          * 2.2 인덱스 생성
          * 2.3 제약 조건 생성
          */
-        const db = dbOrTrx || this.db;
+        const db = dbOrConn || this.db;;
+
+        // if (typeof dbOrConn === 'object' && dbOrConn.dialect) {
+        //     db = new Kysely(dbOrConn);
+        // } else {
+        //     db = dbOrConn || this.db;
+        // }
 
         // TODO: DB 연결 검사
 
         // If not in a transaction, start one
         if (db && db.constructor && db.constructor.name === 'Kysely') {
             await db.transaction().execute(async (trx) => {
-                await this._createSchemaRecursive(trx, schemaName);
+                await this._createSchemaRecursive(trx);
             });
         } else {
             // Already in a transaction (trx)
-            await this._createSchemaRecursive(db, schemaName);
+            await this._createSchemaRecursive(db);
         }
         // await this._createSchemaRecursive(db);
 
     }
 
-    async _createSchemaRecursive(trx, schemaName) {
-        for (const [index, ctx] of this.contexts.entries()) {
-            if (!ctx) continue;
+    async _createSchemaRecursive(trx) {
+        for (let idx = 0; idx < this.contexts.length; idx++) {
+            const ctx = this.contexts[idx];
+            // if (!ctx) continue;
             if (typeof ctx.createSchema === 'function') {
                 ctx.connect = this.connect;
                 ctx.profile = this.profile;
-                await ctx.createSchema(trx, schemaName);
+                await ctx.createSchema(trx);
             }
         }
 
-        for (const [index, table] of this.tables.entries()) {
-            if (!table) continue;
+        // for (const [index, table] of this.tables.entries()) {
+        for (let idx = 0; idx < this.tables.length; idx++) {
+            const table = this.tables[idx];
+            // if (!table) continue;
             if (typeof table.create === 'function') {
                 table.connect = this.connect;
                 table.profile = this.profile;
-                await table.create(trx, schemaName);
+                await table.create(trx);
             }
         }
     }
 
-    dropSchema() {
-        // Drop the database schema
+    async dropSchema(dbOrConn = null) {
+        // Drops tables for this context and nested contexts.
+        // Uses existing transaction if provided; otherwise starts one.
+        const db = dbOrConn || this.db;
+
+        if (db && db.constructor && db.constructor.name === 'Kysely') {
+            await db.transaction().execute(async (trx) => {
+                await this._dropSchemaRecursive(trx);
+            });
+        } else {
+            await this._dropSchemaRecursive(db);
+        }
+    }
+
+    async _dropSchemaRecursive(trx) {
+        // 1) Drop this context's tables
+        for (let idx = this.tables.length - 1; idx >= 0; idx--) {
+            const table = this.tables[idx];
+            const tableName = table.tableName || table._name || String(table);
+            await trx.schema.dropTable(tableName).ifExists().execute();
+        }
+        
+        // 2) Drop nested contexts first (child-first to avoid FK issues)
+        for (let idx = this.contexts.length - 1; idx >= 0; idx--) {
+            const ctx = this.contexts[idx];
+            ctx.connect = this.connect;
+            ctx.profile = this.profile;
+            await ctx.dropSchema(trx);
+        }
     }
 
     ensureSchema() {
