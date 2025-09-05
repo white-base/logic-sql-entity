@@ -4,7 +4,7 @@ import ctx_sto_core from './sto-core.index.js';
 import { sql } from 'kysely';
 import { transformSqlNames } from '../src/util/transform-sql-name.js';
 
-const ctx_prt_core = new SQLContext();
+const ctx_prt_core = new SQLContext('prt_core');
 // ctx_prt_core.addTable(prt_master);
 ctx_prt_core.contexts.add('sto_core', ctx_sto_core);
 ctx_prt_core.tables.add(prt_master);

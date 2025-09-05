@@ -2,6 +2,7 @@
 //==============================================================
 import { MetaTable }                    from 'logic-entity';
 import { MetaTableColumnCollection }    from 'logic-entity';
+import { EventEmitter }                 from 'logic-entity';
 import { SQLRowCollection }             from './collection-sql-row.js';
 import { SQLColumn }                    from './sql-column.js';
 import { SQLRow }                       from './sql-row.js';
@@ -26,8 +27,9 @@ class SQLTable extends MetaTable {
 
         this._connect     = null;
         this._db          = null;
-        this._profile     = {};
+        this._profile     = null; // { vendor: 'mysql' | 'postgres' | 'sqlite' | 'mssql' }
 
+        this._event       = new EventEmitter();
         /**
          * 엔티티의 데이터(로우) 컬렉션
          * 
@@ -71,9 +73,28 @@ class SQLTable extends MetaTable {
         this._profile = p;
     }
 
+    async onCreating(handler) {
+        return this._event.on('creating', handler);
+    }
+
+    async onCreated(handler) {
+        return this._event.on('created', handler);
+    }
+
+    async onDropping(handler) {
+        return this._event.on('dropping', handler);
+    }
+
+    async onDropped(handler) {
+        return this._event.on('dropped', handler);
+    }
+
     async create(trx) {
         
         const db = trx || this.db;
+
+        // pre-create event   TODO: 파라메터 정리 필요
+        await this._event.emit('creating', { table: this, db: db });
 
         // table creation
         let tableBuilder = db.schema.createTable(this.tableName);
@@ -84,6 +105,9 @@ class SQLTable extends MetaTable {
             tableBuilder = tableBuilder.addColumn(name, type, options);
         }
         await tableBuilder.execute();
+
+        // post-create event
+        await this._event.emit('created', { table: this, db: db });
 
         // index creation
         const indexDefs = collectIndexGroups(this.tableName, this.columns);
@@ -126,6 +150,18 @@ class SQLTable extends MetaTable {
                 return col;
             };
         }
+    }
+
+    async drop(trx) {
+        const db = trx || this.db;
+
+        // pre-drop event
+        await this._event.emit('dropping', { table: this, db: db });
+
+        await db.schema.dropTable(this.tableName).ifExists().execute();
+
+        // post-drop event
+        await this._event.emit('dropped', { table: this, db: db });
     }
 
     async select(page = 1, size = 10) {
