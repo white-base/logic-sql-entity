@@ -480,6 +480,17 @@ class SQLContext extends MetaElement {
     // addTable(table) {
     //     this.tables.addValue(table.name, table);
     // }
+
+    addColumn(tableName, column, options = {}) {
+
+        // 컬럼을 동적으로 추가, 지정한 옵션으로
+        const table = this.tables.findByName(tableName);
+        if (table) {
+            table.columns.addValue(column.name, column);
+        } else {
+            throw new Error(`Table '${tableName}' not found in context '${this.name}'.`);
+        }
+    }
 }
 
 export default SQLContext;
