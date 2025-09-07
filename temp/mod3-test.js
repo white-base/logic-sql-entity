@@ -24,6 +24,12 @@ ctx_prt_core.connect = {
         })
     ]
 };
+
+// #################################
+ctx_prt_core.tables['prt_master'].columns.add('prt_description', { dataType: 'text', nullable: true });
+ctx_prt_core.tables['prt_master'].columns.add('created_at', { dataType: 'datetime', defaultValue: 'CURRENT_TIMESTAMP' });
+ctx_prt_core.tables['prt_master'].columns.add('updated_at', { dataType: 'datetime', nullable: true });
+
 // #################################
 
 await ctx_prt_core.init();
@@ -61,8 +67,10 @@ await ctx_prt_core.db.insertInto('prt_master')
   .values({ prt_name: 'Logic Store2' })
   .execute();  
 const sto_master2 = await ctx_prt_core.db.selectFrom('prt_master')
-  .select(['prt_name', 'prt_id'])
+  .selectAll()
   .execute();
+// console.log('prt_master:', sto_master2);
+sto_master2.forEach(row => {console.log('prt_master row:', row);});
 
 const maxId = await ctx_prt_core.qry['getMaxPrtId']();
 console.log('Max prt_id:', maxId);
@@ -95,6 +103,10 @@ console.log(result);
 const sql2 = 'SELECT prt_id, prt_name FROM sto_master WHERE prt_id > 0';
 const result2 = transformSqlNames(sql2, opts);
 console.log(result2);
+
+const sql3 = 'SELECT prt_id, prt_name FROM pre_prt_master_suf WHERE prt_id > 0';
+const result3 = transformSqlNames(sql3, opts);
+console.log(result3);
 
 // 매핑된 테이블/컬럼은 그대로, 나머지는 prefix/suffix 적용
 
