@@ -12,8 +12,8 @@ import { PrefixSuffixPlugin } from '../src/plugin/prefix-suffix.js';
 
 ctx_prt_core.connect = {
     dialect: new SqliteDialect({
-        database: new Database(':memory:')
-        // database: new Database('mydb.sqlite')  // 로컬에 파일로 생성
+        // database: new Database(':memory:')
+        database: new Database('mydb.sqlite')  // 로컬에 파일로 생성
     }),
     plugins: [ 
         new PrefixSuffixPlugin({
