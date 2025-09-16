@@ -261,4 +261,21 @@ function convertVendorToStandard(vendorType, vendor) {
   // 모르는 벤더면 보수적으로 표준 text
   return 'text';
 }
-export { convertStandardToVendor, convertVendorToStandard };
+
+/**
+ * 표준 타입 여부 검사
+ * @param {string} typeStr
+ * @returns {boolean}
+ */
+function isStandardType(typeStr) {
+  if (typeof typeStr !== 'string') return false;
+  const { base } = parseType(typeStr);
+  const stdTypes = [
+    'int', 'bigint', 'numeric', 'real', 'double', 'boolean',
+    'varchar', 'text', 'date', 'time', 'timestamp', 'timestamptz',
+    'binary', 'varbinary', 'blob', 'json', 'uuid'
+  ];
+  return stdTypes.includes(base.replace(/\s+/g, ''));
+}
+
+export { convertStandardToVendor, convertVendorToStandard, isStandardType };

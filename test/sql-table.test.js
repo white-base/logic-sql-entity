@@ -211,7 +211,8 @@ describe('Kysely + Jest (ESM JS)', () => {
 
     })
 
-    it('insert SQLTable3 mysql', async () => {
+    // REVIE: docker로 mysql 서버 띄워서 테스트 해야함
+    it.skip('insert SQLTable3 mysql', async () => {
         const table = new SQLTable('person');
         const conn = {
             dialect: new MysqlDialect({

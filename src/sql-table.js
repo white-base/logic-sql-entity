@@ -106,8 +106,8 @@ class SQLTable extends MetaTable {
         }
         await tableBuilder.execute();
 
-        // post-create event
-        await this._event.emit('created', { table: this, db: db });
+
+        // foreign key creation
 
         // index creation
         const indexDefs = collectIndexGroups(this.tableName, this.columns);
@@ -121,6 +121,9 @@ class SQLTable extends MetaTable {
                     .execute();
             }
         }
+
+        // post-create event
+        await this._event.emit('created', { table: this, db: db });
 
         // inner function
         const chainOptionFns = (fns = []) => (col) => fns.reduce((acc, fn) => fn(acc), col);
@@ -151,6 +154,135 @@ class SQLTable extends MetaTable {
             };
         }
     }
+
+
+    // ============================================
+    /**
+     * 테이블 생성 및 PK 생성 (내부용)
+     */
+    async _createTableWithPK(trx) {
+        const db = trx || this.db;
+
+        // pre-create event
+        await this._event.emit('creating', { table: this, db: db });
+
+        // 테이블 생성
+        let tableBuilder = db.schema.createTable(this.tableName);
+        for (const [key, col] of this.columns.entries()) {
+            const options = (col) => {
+                let c = col;
+                if (col.pk) c = c.primaryKey();
+                if (col.autoIncrement) c = c.autoIncrement();
+                if (col.notNull) c = c.notNull();
+                if (col.unique) c = c.unique();
+                return c;
+            };
+            const name = (typeof col.name === 'string' && col.name) ? col.name : key;
+            const type = col.dataType || 'text';
+            tableBuilder = tableBuilder.addColumn(name, type, options);
+        }
+        await tableBuilder.execute();
+
+        // post-create event
+        await this._event.emit('created', { table: this, db: db });
+    }
+    
+    /**
+     * 외래키(Foreign Key) 제약조건 생성 메서드
+     * @param {object} trx - 트랜잭션 객체(optional)
+     */
+    async createForeignKeys(trx) {
+        const db = trx || this.db;
+        // TODO: 실제 FK 정의에 따라 구현 필요
+        // 예시: this.columns에서 FK 정의를 찾아 생성
+        for (const [key, col] of this.columns.entries()) {
+            if (col.references) {
+                const ref = col.references;
+                await db.schema.alterTable(this.tableName)
+                    .addForeignKeyConstraint(
+                        `${this.tableName}_${key}_fk`,
+                        [col.name || key],
+                        ref.table,
+                        [ref.column],
+                        (builder) => {
+                            if (ref.onDelete) builder.onDelete(ref.onDelete);
+                            if (ref.onUpdate) builder.onUpdate(ref.onUpdate);
+                        }
+                    )
+                    .execute();
+            }
+        }
+    }
+    
+    /**
+     * 복합(Composite) PK 생성 메서드
+     * @param {string[]} columns - PK로 지정할 컬럼명 배열
+     * @param {object} trx - 트랜잭션 객체(optional)
+     */
+    async createPrimaryKey(columns, trx) {
+        const db = trx || this.db;
+        await db.schema.alterTable(this.tableName)
+            .addPrimaryKeyConstraint(`${this.tableName}_pk`, columns)
+            .execute();
+    }
+
+    /**
+     * FK(외래키) 제약조건 생성 메서드
+     * @param {Array} foreignKeys - FK 정의 배열 [{ columns, refTable, refColumns, onDelete, onUpdate }]
+     * @param {object} trx - 트랜잭션 객체(optional)
+     */
+    async createForeignKeyConstraints(foreignKeys, trx) {
+        const db = trx || this.db;
+        for (const fk of foreignKeys) {
+            await db.schema.alterTable(this.tableName)
+                .addForeignKeyConstraint(
+                    `${this.tableName}_${fk.columns.join('_')}_fk`,
+                    fk.columns,
+                    fk.refTable,
+                    fk.refColumns,
+                    (builder) => {
+                        if (fk.onDelete) builder.onDelete(fk.onDelete);
+                        if (fk.onUpdate) builder.onUpdate(fk.onUpdate);
+                    }
+                )
+                .execute();
+        }
+    }
+
+    /**
+     * 인덱스 생성 메서드
+     * @param {Array} indexes - 인덱스 정의 배열 [{ name, columns, unique }]
+     * @param {object} trx - 트랜잭션 객체(optional)
+     */
+    async createIndexDefinitions(indexes, trx) {
+        const db = trx || this.db;
+        for (const idx of indexes) {
+            let builder = db.schema.createIndex(idx.name)
+                .on(this.tableName)
+                .columns(idx.columns);
+            if (idx.unique) builder = builder.unique();
+            await builder.execute();
+        }
+    }
+    /**
+     * 인덱스 생성 메서드
+     * @param {object} trx - 트랜잭션 객체(optional)
+     */
+    async createIndexes(trx) {
+        const db = trx || this.db;
+        const indexDefs = collectIndexGroups(this.tableName, this.columns);
+        for (const indexDef of indexDefs) {
+            if (this.profile.vendor === 'sqlite') {
+                await db.schema.createIndex(indexDef.name)
+                    .on(this.tableName)
+                    .columns(indexDef.columns)
+                    .execute();
+            }
+        }
+    }
+    // ============================================
+
+
 
     async drop(trx) {
         const db = trx || this.db;

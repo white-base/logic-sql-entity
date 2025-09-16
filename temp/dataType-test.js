@@ -1,4 +1,5 @@
 import { convertStandardToVendor, convertVendorToStandard } from '../src/util/convert-data-type.js';
+import { isStandardType } from '../src/util/convert-data-type.js';
 
 const aa  = convertStandardToVendor('int', 'mysql');       // 'INT'
 console.log(aa);
@@ -19,5 +20,13 @@ console.log(dd);
 
 const ee  = convertVendorToStandard('UNIQUEIDENTIFIER', 'mssql'); // 'uuid'
 console.log(ee);
+
+// 표준 타입 여부 확인
+console.log(isStandardType('int'));            // true
+console.log(isStandardType('varchar(255)'));  // true
+console.log(isStandardType('numeric(10,2)')); // true
+console.log(isStandardType('datetime'));       // false
+console.log(isStandardType('unknownType'));    // false
+
 
 console.log('0');
