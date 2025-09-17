@@ -27,8 +27,8 @@ ctx_prt_core.connect = {
 
 // #################################
 ctx_prt_core.tables['prt_master'].columns.add('prt_description', { dataType: 'text', nullable: true });
-ctx_prt_core.tables['prt_master'].columns.add('created_at', { dataType: 'datetime', defaultValue: 'CURRENT_TIMESTAMP' });
-ctx_prt_core.tables['prt_master'].columns.add('updated_at', { dataType: 'datetime', nullable: true });
+ctx_prt_core.tables['prt_master'].columns.add('created_at', { dataType: 'date', defaultValue: 'CURRENT_TIMESTAMP' });
+ctx_prt_core.tables['prt_master'].columns.add('updated_at', { dataType: 'date', nullable: true });
 
 // #################################
 

@@ -4,6 +4,7 @@ import ctx_sto_core from './sto-core.index.js';
 // DB 연결 설정
 import { SqliteDialect } from 'kysely'
 import Database from 'better-sqlite3'
+import { sql } from 'kysely';
 
 
 
@@ -95,12 +96,12 @@ console.log('sto_master2:', sto_master2);
 
 
 // 데이터 조회
-// const sto_master = await sql`
-//   SELECT sto_name
-//   FROM sto_master
-// `.execute(ctx_sto_core.db);
+const sto_master = await sql`
+  SELECT sto_name
+  FROM sto_master
+`.execute(ctx_sto_core.db);
 
-// console.log('sto_master:', sto_master.rows);
+console.log('sto_master:', sto_master.rows);
 
 
 

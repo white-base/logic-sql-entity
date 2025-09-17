@@ -7,7 +7,7 @@ prt_master.columns.add('prt_id');
 prt_master.columns.add('prt_name');
 
 
-prt_master.columns['prt_id'].dataType = 'integer';
+prt_master.columns['prt_id'].dataType = 'int';
 prt_master.columns['prt_id'].pk = true;
 
 prt_master.columns['prt_name'].dataType = 'text';

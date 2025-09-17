@@ -1,0 +1,205 @@
+version: "3.9"
+
+services:
+  # ========== MySQL ==========
+  mysql57:
+    image: mysql:5.7
+    container_name: mysql57
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: mydb
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql57data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # platform: linux/amd64   # ARM(M1/M2)에서 오래된 버전 실행시 필요
+
+  mysql8012:
+    image: mysql:8.0.12
+    container_name: mysql8012
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: mydb
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql8012data:/var/lib/mysql
+    restart: unless-stopped
+    # platform: linux/amd64
+
+  mysql8013:
+    image: mysql:8.0.13
+    container_name: mysql8013
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: mydb
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql8013data:/var/lib/mysql
+    restart: unless-stopped
+    platform: linux/amd64
+
+  mysql8016:
+    image: mysql:8.0.16
+    container_name: mysql8016
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: mydb
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql8016data:/var/lib/mysql
+    restart: unless-stopped
+    platform: linux/amd64
+
+  # ========== MariaDB ==========
+  mariadb101:
+    image: mariadb:10.1
+    container_name: mariadb101
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root123}
+      MARIADB_DATABASE: mydb   # ← 컨테이너 시작 시 자동 생성될 DB 이름
+    ports:
+      - "3310:3306"
+    volumes:
+      - mariadb101data:/var/lib/mysql
+    restart: unless-stopped
+    platform: linux/amd64
+
+  mariadb102:
+    image: mariadb:10.2
+    container_name: mariadb102
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root123}
+      MARIADB_DATABASE: mydb   # ← 컨테이너 시작 시 자동 생성될 DB 이름
+    ports:
+      - "3311:3306"
+    volumes:
+      - mariadb102data:/var/lib/mysql
+    restart: unless-stopped
+    platform: linux/amd64
+
+  mariadb105:
+    image: mariadb:10.5
+    container_name: mariadb105
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root123}
+      MARIADB_DATABASE: mydb   # ← 컨테이너 시작 시 자동 생성될 DB 이름
+    ports:
+      - "3312:3306"
+    volumes:
+      - mariadb105data:/var/lib/mysql
+    restart: unless-stopped
+    platform: linux/amd64
+
+  # ========== PostgreSQL ==========
+  postgres95:
+    image: postgres:9.5
+    container_name: postgres95
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pg123}
+      POSTGRES_DB: mydb         # ← 컨테이너 시작 시 자동 생성될 DB 이름
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg95data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    platform: linux/amd64
+
+  postgres12:
+    image: postgres:12
+    container_name: postgres12
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pg123}
+      POSTGRES_DB: mydb         # ← 컨테이너 시작 시 자동 생성될 DB 이름
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg12data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres15:
+    image: postgres:15
+    container_name: postgres15
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pg123}
+      POSTGRES_DB: mydb         # ← 컨테이너 시작 시 자동 생성될 DB 이름
+    ports:
+      - "5435:5432"
+    volumes:
+      - pg15data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ========== SQL Server (Linux) ==========
+  mssql2017:
+    image: mcr.microsoft.com/mssql/server:2017-latest
+    container_name: mssql2017
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SA_PASSWORD:-Your_password123}
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql2017data:/var/opt/mssql
+    restart: unless-stopped
+
+  mssql2019:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql2019
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SA_PASSWORD:-Your_password123}
+    ports:
+      - "1434:1433"
+    volumes:
+      - mssql2019data:/var/opt/mssql
+    restart: unless-stopped
+
+  mssql2022:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql2022
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SA_PASSWORD:-Your_password123}
+    ports:
+      - "1435:1433"
+    volumes:
+      - mssql2022data:/var/opt/mssql
+    restart: unless-stopped
+
+volumes:
+  mysql57data:
+  mysql8012data:
+  mysql8013data:
+  mysql8016data:
+  mariadb101data:
+  mariadb102data:
+  mariadb105data:
+  pg95data:
+  pg12data:
+  pg15data:
+  mssql2017data:
+  mssql2019data:
+  mssql2022data:

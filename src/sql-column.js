@@ -20,6 +20,9 @@ class SQLColumn extends MetaColumn {
         this._unsigned      = false;    // 부호 없는 숫자 MySQL, MariaDB 전용
         this._isDynamic     = true;     // 동적 컬럼 여부 (default: true), 사용자가 직접값을 설정하지 않으면 true
         this._virtual       = false;    // 가상 컬럼 여부
+
+
+        if (p_property) this._load(p_property);
     }
 
     /**

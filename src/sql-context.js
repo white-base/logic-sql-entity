@@ -31,7 +31,7 @@ class SQLContext extends MetaElement {
         
         this._connect     = null;
         this._db          = null;
-        this._profile     = {};
+        this._profile     = { vendor: null, version: null, features: null }; // { vendor: 'mysql' | 'postgres' | 'sqlite' | 'mssql'
     }
 
     get tables() {

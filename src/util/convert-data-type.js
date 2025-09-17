@@ -34,17 +34,17 @@ function convertStandardToVendor(stdType, vendor) {
   const v = (vendor || '').toLowerCase();
 
   // 표준 기본값 보정
-  const type = base.replace(/\s+/g, ' '); // 'double precision' 등 대비
+  const type = base.replace(/\s+/g, ' ');
   const L = (def) => fmtArgs(args, def);
 
   const map = {
     mysql() {
       switch (type) {
-        case 'int':         return 'INT';
+        case 'int':         return 'INTEGER';              // ← 'int' 대신 'integer'
         case 'bigint':      return 'BIGINT';
         case 'numeric':     return `DECIMAL${L('(18,0)')}`;
-        case 'real':        return 'FLOAT';                // MySQL REAL은 DOUBLE alias인 경우가 많으나 안전하게 FLOAT
-        case 'double':      return 'DOUBLE';
+        case 'real':        return 'REAL';                // MySQL REAL은 DOUBLE alias인 경우가 많으나 안전하게 FLOAT
+        case 'double':      return 'REAL';
         case 'boolean':     return 'TINYINT(1)';
         case 'varchar':     return `VARCHAR${L('(255)')}`;
         case 'text':        return 'LONGTEXT';
@@ -59,6 +59,10 @@ function convertStandardToVendor(stdType, vendor) {
         case 'uuid':        return 'CHAR(36)';            // 또는 BINARY(16)
         default:            return 'TEXT';
       }
+    },
+    mariadb() { // 추가
+      // MariaDB는 MySQL과 거의 동일
+      return map.mysql();
     },
     postgres() {
       switch (type) {
@@ -144,7 +148,6 @@ function convertStandardToVendor(stdType, vendor) {
   };
 
   if (map[v]) return map[v]();
-  // 모르는 벤더면 보수적으로 대문자 반환
   return (base || 'text').toUpperCase() + (args.length ? fmtArgs(args) : '');
 }
 
@@ -155,7 +158,7 @@ function convertStandardToVendor(stdType, vendor) {
 // -------------------------------------------------------------
 function convertVendorToStandard(vendorType, vendor) {
   const { base, args } = parseType(vendorType);
-  const b = base.replace(/\s+/g, ' '); // 'double precision' 대비
+  const b = base.replace(/\s+/g, ' ');
   const v = (vendor || '').toLowerCase();
 
   // 표준 타입 포매터
@@ -185,6 +188,10 @@ function convertVendorToStandard(vendorType, vendor) {
       if (/^json$/.test(b)) return 'json';
       if (/^char$/.test(b) && args[0] === 36) return 'uuid';
       return 'text';
+    },
+    mariadb() { // 추가
+      // MariaDB는 MySQL과 거의 동일
+      return m.mysql();
     },
     postgres() {
       if (/^integer$/.test(b) || /^int4$/.test(b)) return 'int';
@@ -261,6 +268,43 @@ function convertVendorToStandard(vendorType, vendor) {
   // 모르는 벤더면 보수적으로 표준 text
   return 'text';
 }
+
+// /**
+//  * 표준 타입을 Kysely 컬럼 타입 문자열로 변환
+//  * (테이블 스키마 정의 시 TypeScript 타입 힌트 용도)
+//  * @param {string} stdType
+//  * @returns {string}
+//  */
+// function convertStandardToKysely(stdType) {
+//   const { base } = parseType(stdType);
+//   const type = base.replace(/\s+/g, '');
+
+//   switch (type) {
+//     case 'int':
+//     case 'bigint':
+//     case 'numeric':
+//     case 'real':
+//     case 'double':
+//       return 'number';
+//     case 'boolean':
+//       return 'boolean';
+//     case 'varchar':
+//     case 'text':
+//     case 'date':
+//     case 'time':
+//     case 'timestamp':
+//     case 'timestamptz':
+//     case 'json':
+//     case 'uuid':
+//       return 'string';
+//     case 'binary':
+//     case 'varbinary':
+//     case 'blob':
+//       return 'Uint8Array';
+//     default:
+//       return 'unknown';
+//   }
+// }
 
 /**
  * 표준 타입 여부 검사

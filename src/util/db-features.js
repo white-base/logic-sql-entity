@@ -19,18 +19,19 @@ function mergeFeatures(vendorFeatures) {
 // ================= MySQL =================
 const parseMySqlStyleVersion = (version = '') => {
   const [M, m, t] = String(version).split('.').map(x => parseInt(x || '0', 10));
-  return {
-    major: M || 0,
-    minor: m || 0,
-    patch: t || 0,
-    gte(a, b, c) {
-      if (this.major > a) return true;
-      if (this.major < a) return false;
-      if (this.minor > b) return true;
-      if (this.minor < b) return false;
-      return (this.patch >= c);
-    }
+  const major = Number.isFinite(M) ? M : 0;
+  const minor = Number.isFinite(m) ? m : 0;
+  const patch = Number.isFinite(t) ? t : 0;
+
+  const gte = (a, b, c) => {
+    if (major > a) return true;
+    if (major < a) return false;
+    if (minor > b) return true;
+    if (minor < b) return false;
+    return patch >= c;
   };
+
+  return { major, minor, patch, gte };
 };
 
 export const resolveMySqlFeatures = (version = '') => {
