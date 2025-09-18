@@ -239,7 +239,7 @@ class SQLTable extends MetaTable {
             tb = tb.addColumn(name, vendorType, (c0) => {
                 let c = c0;
                 if (col.nullable === false) c = c.notNull();
-                if (col.autoIncrement)      c = c.autoIncrement();
+                if (col.autoIncrement)      c = applyAutoIncrementForVendor(c, vendor);
                 // PK는 뒤에서 복합처리도 하므로 단일 PK만 여기서 표시(복합은 제약으로 처리)
                 if (col.primaryKey === true) c = c.primaryKey();
                 if (col.unique === true)     c = c.unique();
@@ -247,6 +247,37 @@ class SQLTable extends MetaTable {
                 c = applyDefault(c, col.defaultValue, vendor) || c;                       // defaultValue 규약 반영   [oai_citation:14‡apply-default.js](file-service://file-LSFSrpHpBxWGcmsNLD1EDw)
                 return c;
             });
+        }
+
+        function applyAutoIncrementForVendor(columnBuilder, vendorName) {
+            const fn = (name) => typeof columnBuilder[name] === 'function'
+                ? columnBuilder[name].bind(columnBuilder)
+                : null;
+
+            switch ((vendorName || '').toLowerCase()) {
+            case 'mssql': {
+                const identity = fn('identity');
+                if (identity) return identity();
+                break;
+            }
+            case 'postgres': {
+                const generatedIdentity = fn('generatedAlwaysAsIdentity');
+                if (generatedIdentity) return generatedIdentity();
+                break;
+            }
+            case 'mariadb':
+            case 'mysql':
+            case 'sqlite': {
+                const autoIncrement = fn('autoIncrement');
+                if (autoIncrement) return autoIncrement();
+                break;
+            }
+            default:
+                break;
+            }
+
+            const fallback = fn('autoIncrement');
+            return fallback ? fallback() : columnBuilder;
         }
 
         // 2) 복합 PK/UNIQUE (unique가 string 그룹이면 복합 UNIQUE)

@@ -33,8 +33,9 @@ const orders = new SQLTable('orders');
 orders.connect = users.connect;
 orders.columns.add('id',       { dataType: 'int', primaryKey: true, autoIncrement: true, nullable: false });
 orders.columns.add('user_id',  { dataType: 'int', nullable: false,
-  references: { target: 'users.id', group: 'fk_user', onDelete: 'CASCADE', onUpdate: 'CASCADE' } });
-orders.columns.add('amount',   { dataType: 'numeric(12,2)', nullable: false, indexes: ['ix_user', 'ix_amount_created'] });
+  references: { target: 'users.id', group: 'fk_user', onDelete: 'CASCADE', onUpdate: 'CASCADE' },
+  indexes: ['ix_user'] });
+orders.columns.add('amount',   { dataType: 'numeric(12,2)', nullable: false, indexes: ['ix_amount_created'] });
 orders.columns.add('created_at',{ dataType: 'timestamp',    nullable: false, defaultValue: { kind: 'now' }, indexes: ['ix_amount_created'] });
 
 // 2) 3단계 실행

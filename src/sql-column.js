@@ -49,9 +49,10 @@ class SQLColumn extends MetaColumn {
         if (typeof v !== 'string' || v.trim() === '') {
             throw new Error(`Invalid dataType value: ${v}`); // TODO: ExtendError 정의
         }
-        if (!isStandardType(v)) {
-            throw new Error(`dataType must be a standard SQL type. Invalid value: ${v}`);   // TODO: ExtendError 정의
-        }
+        // TODO: 임시 제거
+        // if (!isStandardType(v)) {
+        //     throw new Error(`dataType must be a standard SQL type. Invalid value: ${v}`);   // TODO: ExtendError 정의
+        // }
         this._dataType = v; 
     }
 

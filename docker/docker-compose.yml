@@ -46,14 +46,17 @@ services:
     restart: unless-stopped
     platform: linux/amd64
 
-  mysql8016:
+  mysql8016: #POINT:
     image: mysql:8.0.16
     container_name: mysql8016
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      MYSQL_DATABASE: mydb
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-mydb}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-app123}
+      MYSQL_ROOT_HOST: "%"
     ports:
-      - "3309:3306"
+      - "${MYSQL8016_PORT:-3309}:3306"
     volumes:
       - mysql8016data:/var/lib/mysql
     restart: unless-stopped
@@ -73,7 +76,7 @@ services:
     restart: unless-stopped
     platform: linux/amd64
 
-  mariadb102:
+  mariadb102: #POINT:
     image: mariadb:10.2
     container_name: mariadb102
     environment:
@@ -135,14 +138,15 @@ services:
       timeout: 5s
       retries: 10
 
-  postgres15:
+  postgres15: #POINT:
     image: postgres:15
     container_name: postgres15
     environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pg123}
-      POSTGRES_DB: mydb         # ← 컨테이너 시작 시 자동 생성될 DB 이름
+      POSTGRES_DB: ${POSTGRES_DB:-mydb}         # ← 컨테이너 시작 시 자동 생성될 DB 이름
     ports:
-      - "5435:5432"
+      - "${POSTGRES15_PORT:-5435}:5432"
     volumes:
       - pg15data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -177,7 +181,7 @@ services:
       - mssql2019data:/var/opt/mssql
     restart: unless-stopped
 
-  mssql2022:
+  mssql2022: #POINT:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql2022
     environment:

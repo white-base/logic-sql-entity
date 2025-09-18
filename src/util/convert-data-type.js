@@ -30,19 +30,39 @@ function fmtArgs(args, fallback = '') {
 //    - 필요 시 기본값 보정(varchar 길이, numeric(precision,scale) 등)
 // -------------------------------------------------------------
 function convertStandardToVendor(stdType, vendor) {
-  const { base, args } = parseType(stdType);
-  const v = (vendor || '').toLowerCase();
+    const { base, args } = parseType(stdType);
+    const v = (vendor || '').toLowerCase();
 
-  // 표준 기본값 보정
-  const type = base.replace(/\s+/g, ' ');
-  const L = (def) => fmtArgs(args, def);
+    // 표준 기본값 보정
+    const type = base.replace(/\s+/g, ' ');
+    const L = (def) => fmtArgs(args, def);
 
-  const map = {
+    const map = {
+    sqlite() {
+        switch (type) {
+        case 'int': case 'bigint':     return 'INTEGER';
+        case 'numeric':                return 'NUMERIC';
+        case 'real': case 'double':    return 'REAL';
+        case 'boolean':                return 'INTEGER';   // 0/1
+        
+        case 'varchar': case 'text':   return 'TEXT';
+
+        case 'date': case 'time':
+        case 'timestamp': case 'timestamptz': return 'NUMERIC'; // 또는 TEXT
+
+        case 'binary': case 'varbinary': case 'blob': return 'BLOB';
+        case 'json':                    return 'TEXT';
+        case 'uuid':                    return 'TEXT';
+        case 'char':                    return `CHAR${L('(10)')}`;
+        default:                        return 'TEXT';
+        }
+    },
     mysql() {
-      switch (type) {
+        switch (type) {
         case 'int':         return 'INTEGER';              // ← 'int' 대신 'integer'
         case 'bigint':      return 'BIGINT';
-        case 'numeric':     return `DECIMAL${L('(18,0)')}`;
+        case 'numeric':     return `NUMERIC${L('(18,0)')}`;
+        // case 'numeric':     return `NUMERIC`;
         case 'real':        return 'REAL';                // MySQL REAL은 DOUBLE alias인 경우가 많으나 안전하게 FLOAT
         case 'double':      return 'REAL';
         case 'boolean':     return 'TINYINT(1)';
@@ -57,15 +77,16 @@ function convertStandardToVendor(stdType, vendor) {
         case 'blob':        return 'LONGBLOB';
         case 'json':        return 'JSON';
         case 'uuid':        return 'CHAR(36)';            // 또는 BINARY(16)
+        case 'char':        return `CHAR${L('(10)')}`;
         default:            return 'TEXT';
-      }
+        }
     },
     mariadb() { // 추가
-      // MariaDB는 MySQL과 거의 동일
-      return map.mysql();
+        // MariaDB는 MySQL과 거의 동일
+        return map.mysql();
     },
     postgres() {
-      switch (type) {
+        switch (type) {
         case 'int':         return 'INTEGER';
         case 'bigint':      return 'BIGINT';
         case 'numeric':     return `NUMERIC${L('')}`;
@@ -83,12 +104,13 @@ function convertStandardToVendor(stdType, vendor) {
         case 'blob':        return 'BYTEA';
         case 'json':        return 'JSONB';
         case 'uuid':        return 'UUID';
+        case 'char':        return `CHAR${L('(10)')}`;
         default:            return 'TEXT';
-      }
+        }
     },
     mssql() {
-      switch (type) {
-        case 'int':         return 'INT';
+        switch (type) {
+        case 'int':         return 'INTEGER';
         case 'bigint':      return 'BIGINT';
         case 'numeric':     return `DECIMAL${L('') || '(18,0)'}`;
         case 'real':        return 'REAL';
@@ -105,26 +127,13 @@ function convertStandardToVendor(stdType, vendor) {
         case 'blob':        return 'VARBINARY(MAX)';
         case 'json':        return 'NVARCHAR(MAX)';        // + ISJSON() 제약 권장
         case 'uuid':        return 'UNIQUEIDENTIFIER';
+        case 'char':        return `CHAR${L('(10)')}`;
         default:            return 'VARCHAR(MAX)';
-      }
+        }
     },
-    sqlite() {
-      switch (type) {
-        case 'int': case 'bigint':     return 'INTEGER';
-        case 'numeric':                return 'NUMERIC';
-        case 'real': case 'double':    return 'REAL';
-        case 'boolean':                return 'INTEGER';   // 0/1
-        case 'varchar': case 'text':   return 'TEXT';
-        case 'date': case 'time':
-        case 'timestamp': case 'timestamptz': return 'NUMERIC'; // 또는 TEXT
-        case 'binary': case 'varbinary': case 'blob': return 'BLOB';
-        case 'json':                    return 'TEXT';
-        case 'uuid':                    return 'TEXT';
-        default:                        return 'TEXT';
-      }
-    },
+
     oracle() {
-      switch (type) {
+        switch (type) {
         case 'int':         return 'NUMBER(10)';
         case 'bigint':      return 'NUMBER(19)';
         case 'numeric':     return `NUMBER${L('') || '(18,0)'}`;
@@ -143,12 +152,12 @@ function convertStandardToVendor(stdType, vendor) {
         case 'json':        return 'JSON';                 // 12c+
         case 'uuid':        return 'RAW(16)';              // 또는 CHAR(36)
         default:            return 'CLOB';
-      }
+        }
     }
-  };
+    };
 
-  if (map[v]) return map[v]();
-  return (base || 'text').toUpperCase() + (args.length ? fmtArgs(args) : '');
+    if (map[v]) return map[v]();
+    return (base || 'text').toUpperCase() + (args.length ? fmtArgs(args) : '');
 }
 
 // -------------------------------------------------------------
@@ -317,7 +326,7 @@ function isStandardType(typeStr) {
   const stdTypes = [
     'int', 'bigint', 'numeric', 'real', 'double', 'boolean',
     'varchar', 'text', 'date', 'time', 'timestamp', 'timestamptz',
-    'binary', 'varbinary', 'blob', 'json', 'uuid'
+    'binary', 'varbinary', 'blob', 'json', 'uuid', 'char'
   ];
   return stdTypes.includes(base.replace(/\s+/g, ''));
 }
