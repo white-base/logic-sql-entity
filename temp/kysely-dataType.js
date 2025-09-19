@@ -1,6 +1,9 @@
-import { Kysely, SqliteDialect, PostgresDialect, MysqlDialect } from 'kysely';
+import { Kysely, SqliteDialect, PostgresDialect, MysqlDialect, MssqlDialect } from 'kysely';
 import Database from 'better-sqlite3';
 import mysql from 'mysql2';
+// import mssql from 'mssql';
+import * as tedious from 'tedious'
+import * as tarn from 'tarn'
 
 
 // MYSQL 접속 정보 환경변수에서 참조
@@ -15,6 +18,21 @@ const MYSQL_CONFIG = {
 //   allowPublicKeyRetrieval: true,
 };
 
+const MSSQL_CONFIG = {
+    user: process.env.MSSQL2022_USER ?? 'sa',
+    password: process.env.MSSQL2022_PASSWORD ?? 'Your_password123',
+    server: process.env.MSSQL2022_HOST ?? '127.0.0.1',
+    port: Number(process.env.MSSQL2022_PORT ?? '1435'),
+    database: process.env.MSSQL2022_DB ?? 'mydb',
+    trustServerCertificate: true,
+    enableArithAbort: true,
+    pool: {
+        max: 5,
+        min: 0,
+        idleTimeoutMillis: 30000
+    }
+};
+
 const sanitizeName = value => value.replace(/[^a-z0-9]/gi, '_');
 const shortMessage = error => {
   if (!error) return 'unknown error';
@@ -25,86 +43,163 @@ const shortMessage = error => {
 let tableCounter = 0;
 const buildTempTableName = type =>
   `test_table_${sanitizeName(type)}_${Date.now().toString(36)}_${(tableCounter++).toString(36)}`;
-
+ 
 const vendorDefinitions = [
-    // {
-    //     name: 'sqlite',
-    //     typeBase : ['integer', 'bigint', 'varchar(n)', 'text', 'smallint', 'real', 'float', 'numeric(10,2)', 'decimal(10,2)', 'char(10)', 'time', 'timestamp'],
-    //     typeExtend: ['boolean', 'datetime', 'json', 'uuid', 'binary(16)', 'varbinary(255)', 'blob', 'bytea', 'timestamptz', 'date'],
-    //     types: [
-    //         'integer', 'text', 'real', 'blob', 'boolean', 'date', 'datetime', 'json',
-    //         'smallint', 'double', 'float', 'numeric(10,2)', 'decimal(10,2)', 'char(10)',
-    //         'time', 'timestamp', 'timestamptz', 'varbinary(255)', 'binary(16)', 'bytea', 'char(36)', 'uuid'
-    //     ],
-    //     init: async () => {
-    //         const database = new Database(':memory:');
-    //         const db = new Kysely({ dialect: new SqliteDialect({ database }) });
-    //         return {
-    //             db,
-    //             async dispose() {
-    //                 await db.destroy();
-    //             },
-    //         };
-    //     },
-    // },
     {
-        name: 'mysql',
-        types: [
-            'int', 'integer', 'bigint', 'varchar(255)', 'text', 'boolean', 'date', 'datetime', 'json',
-            'smallint', 'double', 'real', 'float', 'numeric(10,2)', 'decimal(10,2)', 'char(10)',
-            'time', 'timestamp', 'uuid', 'varbinary(255)', 'binary(16)', 'blob', 'char(36)', 'uuid'
-        ],
-        init: async () => {
-            const pool = mysql.createPool(MYSQL_CONFIG);
-            const db = new Kysely({ dialect: new MysqlDialect({ pool }) });
-            return {
-                db,
-                async dispose() {
-                    await db.destroy();
-                    // await pool.end().catch(() => {});
-                },
-            };
-        },
+      name: 'sqlite',
+      types: [
+          'varchar', 'char', 'text', 'integer', 'int2', 'int4', 'int8', 'smallint', 'bigint', 'boolean', 'real',
+          'double precision', 'float4', 'float8', 'decimal', 'numeric', 'binary', 'bytea', 'date', 'datetime',
+          'time', 'timetz', 'timestamp', 'timestamptz', 'serial', 'bigserial', 'uuid', 'json', 'jsonb', 'blob',
+          'varbinary', 'int4range', 'int4multirange', 'int8range', 'int8multirange', 'numrange', 'nummultirange',
+          'tsrange', 'tsmultirange', 'tstzrange', 'tstzmultirange', 'daterange', 'datemultirange',
+          'varchar(255)', 'char(10)', 'decimal(10, 2)', 'numeric(10, 2)', 'binary(16)', 'datetime(3)',
+          'time(3)', 'timetz(3)', 'timestamp(3)', 'timestamptz(3)', 'varbinary(255)'
+      ],
+      init: async () => {
+          const database = new Database(':memory:');
+          const db = new Kysely({ dialect: new SqliteDialect({ database }) });
+          return {
+              db,
+              async dispose() {
+                  await db.destroy();
+              },
+          };
+      },
     },
-    // {
-    //     name: 'postgres',
-    //     types: [
-    //         'integer', 'bigint', 'text', 'boolean', 'date', 'timestamp', 'json', 'uuid',
-    //         'smallint', 'double precision', 'real', 'numeric(10,2)', 'decimal(10,2)', 'char(10)',
-    //         'time', 'timestamptz', 'varbinary(255)', 'binary(16)', 'bytea', 'char(36)', 'uuid'
-    //     ],
-    //     init: async () => {
-    //         let pgModule;
-    //         try {
-    //             pgModule = await import('pg');
-    //         } catch (error) {
-    //             if (error.code === 'ERR_MODULE_NOT_FOUND') {
-    //                 throw new Error('package "pg" is not installed');
-    //             }
-    //             throw error;
-    //         }
-    //         const { Pool } = pgModule;
-    //         const connectionString =
-    //             process.env.POSTGRES_URL ||
-    //             process.env.KYSELY_POSTGRES_URL ||
-    //             'postgres://postgres:pg123@localhost:5435/mydb';
-    //         const pool = new Pool({ connectionString, max: 1 });
-    //         try {
-    //             const client = await pool.connect();
-    //             client.release();
-    //         } catch (error) {
-    //             await pool.end().catch(() => {});
-    //             throw new Error(`connection failed (${shortMessage(error)})`);
-    //         }
-    //         const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
-    //         return {
-    //             db,
-    //             async dispose() {
-    //                 await db.destroy();
-    //             },
-    //         };
-    //     },
-    // },
+    {
+      name: 'mysql',
+      types: [
+          'varchar', 'char', 'text', 'integer', 'int2', 'int4', 'int8', 'smallint', 'bigint', 'boolean', 'real',
+          'double precision', 'float4', 'float8', 'decimal', 'numeric', 'binary', 'bytea', 'date', 'datetime',
+          'time', 'timetz', 'timestamp', 'timestamptz', 'serial', 'bigserial', 'uuid', 'json', 'jsonb', 'blob',
+          'varbinary', 'int4range', 'int4multirange', 'int8range', 'int8multirange', 'numrange', 'nummultirange',
+          'tsrange', 'tsmultirange', 'tstzrange', 'tstzmultirange', 'daterange', 'datemultirange',
+          'varchar(255)', 'char(10)', 'decimal(10, 2)', 'numeric(10, 2)', 'binary(16)', 'datetime(3)',
+          'time(3)', 'timetz(3)', 'timestamp(3)', 'timestamptz(3)', 'varbinary(255)'
+      ],
+      // 안되는 타입 : mysql 8016 기준
+      // varchar, bytea, timetz, timestamptz, bigserial, uuid, jsonb
+      // varbinary, int4range, 'int4multirange', 'int8range', 'int8multirange', 'numrange', 'nummultirange',
+      // tsrange', 'tsmultirange', 'tstzrange', 'tstzmultirange', 'daterange', 'datemultirange',
+      // 'timetz(3)', 'timestamptz(3)'
+      init: async () => {
+          const pool = mysql.createPool(MYSQL_CONFIG);
+          const db = new Kysely({ dialect: new MysqlDialect({ pool }) });
+          return {
+              db,
+              async dispose() {
+                  await db.destroy();
+                  // await pool.end().catch(() => {});
+              },
+          };
+      },
+    },
+    {
+      name: 'postgres',
+      types: [
+          'varchar', 'char', 'text', 'integer', 'int2', 'int4', 'int8', 'smallint', 'bigint', 'boolean', 'real',
+          'double precision', 'float4', 'float8', 'decimal', 'numeric', 'binary', 'bytea', 'date', 'datetime',
+          'time', 'timetz', 'timestamp', 'timestamptz', 'serial', 'bigserial', 'uuid', 'json', 'jsonb', 'blob',
+          'varbinary', 'int4range', 'int4multirange', 'int8range', 'int8multirange', 'numrange', 'nummultirange',
+          'tsrange', 'tsmultirange', 'tstzrange', 'tstzmultirange', 'daterange', 'datemultirange',
+          'varchar(255)', 'char(10)', 'decimal(10, 2)', 'numeric(10, 2)', 'binary(16)', 'datetime(3)',
+          'time(3)', 'timetz(3)', 'timestamp(3)', 'timestamptz(3)', 'varbinary(255)'
+      ],
+      // 안되는 타입 : postgres 15 기준
+      // binary, datetime, blob, varbinary,
+      // 'binary(16)', 'datetime(3)', 'varbinary(255)'
+      init: async () => {
+          let pgModule;
+          try {
+              pgModule = await import('pg');
+          } catch (error) {
+              if (error.code === 'ERR_MODULE_NOT_FOUND') {
+                  throw new Error('package "pg" is not installed');
+              }
+              throw error;
+          }
+          const { Pool } = pgModule;
+          const connectionString =
+              process.env.POSTGRES_URL ||
+              process.env.KYSELY_POSTGRES_URL ||
+              'postgres://postgres:pg123@localhost:5435/mydb';
+          const pool = new Pool({ connectionString, max: 1 });
+          try {
+              const client = await pool.connect();
+              client.release();
+          } catch (error) {
+              await pool.end().catch(() => {});
+              throw new Error(`connection failed (${shortMessage(error)})`);
+          }
+          const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+          return {
+              db,
+              async dispose() {
+                  await db.destroy();
+              },
+          };
+      },
+    },
+    {
+      name: 'mssql',
+      types: [
+          'varchar', 'char', 'text', 'integer', 'int2', 'int4', 'int8', 'smallint', 'bigint', 'boolean', 'real',
+          'double precision', 'float4', 'float8', 'decimal', 'numeric', 'binary', 'bytea', 'date', 'datetime',
+          'time', 'timetz', 'timestamp', 'timestamptz', 'serial', 'bigserial', 'uuid', 'json', 'jsonb', 'blob',
+          'varbinary', 'int4range', 'int4multirange', 'int8range', 'int8multirange', 'numrange', 'nummultirange',
+          'tsrange', 'tsmultirange', 'tstzrange', 'tstzmultirange', 'daterange', 'datemultirange',
+          'varchar(255)', 'char(10)', 'decimal(10, 2)', 'numeric(10, 2)', 'binary(16)', 'datetime(3)',
+          'time(3)', 'timetz(3)', 'timestamp(3)', 'timestamptz(3)', 'varbinary(255)'
+      ],
+      // 안되는 타입 : mssql 2022 기준
+      // int2, int4, int8, boolean, float4, float8, bytea, timetz, timestamp, timestamptz,
+      // serial, bigserial, uuid, json, jsonb, blob,
+      // int4range, int4multirange, int8range, int8multirange, numrange, nummultirange,
+      // tsrange, tsmultirange, tstzrange, tstzmultirange, daterange, datemultirange,
+      // datetime(3), timetz(3), timestamp(3), timestamptz(3)
+      init: async () => {
+          // const pool = new mssql.ConnectionPool(MSSQL_CONFIG);
+          // await pool.connect();
+          const dialectConfig = {
+              tarn: {
+                  ...tarn,
+                  options: {
+                      min: 0,
+                      max: 10,
+                  },
+              },
+              tedious: {
+                  ...tedious,
+                  connectionFactory: () => new tedious.Connection({
+                      authentication: {
+                          options: {
+                              password: 'Your_password123',
+                              userName: 'sa',
+                          },
+                          type: 'default',
+                      },
+                      options: {
+                          database: 'mydb',
+                          port: 1435,
+                          trustServerCertificate: true,
+                      },
+                      server: 'localhost',
+                  }),
+              },
+          }
+          const db = new Kysely({
+            dialect: new MssqlDialect(dialectConfig),
+           });
+          return {
+              db,
+              async dispose() {
+                  await db.destroy();
+                  // await pool.close();
+              },
+          };
+      },
+    }
 ];
 
 // 전체 자료형 나열 (중복 제거)
@@ -115,62 +210,6 @@ const allTypes = Array.from(
 );
 console.log('전체 자료형:', allTypes);
 
-function parseTypeSpec(type) {
-  const match = /^\s*([a-zA-Z0-9_]+)\s*\(([^)]+)\)\s*$/.exec(type);
-  if (!match) return { base: type, args: [] };
-  const args = match[2]
-    .split(',')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-  return { base: match[1], args };
-}
-
-async function addColumnWithVendor(db, tableName, columnName, type, vendorName) {
-  if (vendorName !== 'mysql') {
-    await db.schema.alterTable(tableName).addColumn(columnName, type).execute();
-    return;
-  }
-
-  const { base, args } = parseTypeSpec(type);
-  const baseLower = base.toLowerCase();
-  const lengthTypes = new Set(['varchar', 'char', 'varbinary', 'binary']);
-  const precisionTypes = new Set(['decimal', 'numeric']);
-
-  if (!args.length || (!lengthTypes.has(baseLower) && !precisionTypes.has(baseLower))) {
-    await db.schema.alterTable(tableName).addColumn(columnName, base).execute();
-    return;
-  }
-
-  await db.schema
-    .alterTable(tableName)
-    .addColumn(columnName, base, (col) => {
-      let c = col;
-      if (lengthTypes.has(baseLower)) {
-        const len = Number(args[0]);
-        if (Number.isFinite(len) && typeof c.length === 'function') {
-          c = c.length(len);
-        }
-        return c;
-      }
-
-      if (precisionTypes.has(baseLower)) {
-        const precision = Number(args[0]);
-        const scale = Number(args[1]);
-        if (Number.isFinite(precision) && typeof c.precision === 'function') {
-          if (Number.isFinite(scale)) {
-            c = c.precision(precision, scale);
-          } else {
-            c = c.precision(precision);
-          }
-        }
-        return c;
-      }
-
-      return c;
-    })
-    .execute();
-}
-
 async function testAddColumn(db, vendorName, type) {
   const tableName = buildTempTableName(type);
   try {
@@ -178,7 +217,7 @@ async function testAddColumn(db, vendorName, type) {
       .createTable(tableName)
       .addColumn('id', 'integer', col => col.primaryKey())
       .execute();
-    await addColumnWithVendor(db, tableName, 'test_col', type, vendorName);
+    await db.schema.alterTable(tableName).addColumn('test_col', type).execute();
     console.log(`[${vendorName}] ${type}: ✅`);
   } catch (error) {
     console.log(`[${vendorName}] ${type}: ❌ (${shortMessage(error)})`);
@@ -190,6 +229,12 @@ async function testAddColumn(db, vendorName, type) {
 async function run() {
   for (const vendor of vendorDefinitions) {
     let context;
+
+    // if (vendor.name !== 'sqlite') continue
+    // if (vendor.name !== 'mysql') continue
+    if (vendor.name !== 'mssql') continue
+    // if (vendor.name !== 'postgres') continue
+    
     try {
       context = await vendor.init();
     } catch (error) {

@@ -5,7 +5,7 @@ import { convertStandardToVendor } from '../src/util/convert-data-type.js'
 
 const MYSQL_CONFIG = {
   host: process.env.MYSQL8016_HOST ?? '127.0.0.1',
-  port: Number(process.env.MYSQL8016_PORT ?? '3309'),
+  port: Number(process.env.MYSQL8016_PORT ?? '3311'),
   user: process.env.MYSQL8016_USER ?? 'root',
   password: process.env.MYSQL8016_PASSWORD ?? 'root123',
   database: process.env.MYSQL8016_DB ?? 'mydb'
@@ -47,19 +47,23 @@ describe('[target: create-table-mysql8016.test.js]', () => {
     users.columns.add('email', { dataType: 'varchar(255)', unique: true, nullable: false });
     users.columns.add('name', { dataType: 'varchar(100)', nullable: false });
     users.columns.add('created_at', { dataType: 'timestamp', nullable: false, defaultValue: { kind: 'now' } });
-    users.columns.add('bigint_col', { dataType: 'bigint' });
-    users.columns.add('real_col', { dataType: 'real' });
-    users.columns.add('double_col', { dataType: 'double' });
-    // users.columns.add('boolean_col', { dataType: 'boolean' });
-    users.columns.add('date_col', { dataType: 'date' });
-    users.columns.add('time_col', { dataType: 'time' });
-    users.columns.add('timestamptz_col', { dataType: 'timestamptz' });
-    users.columns.add('varbinary_col', { dataType: 'varbinary(255)' });
-    users.columns.add('binary_col', { dataType: 'binary(16)' });
-    // users.columns.add('blob_col', { dataType: 'blob' });
-    users.columns.add('json_col', { dataType: 'json' });
-    users.columns.add('uuid_col', { dataType: 'uuid' });
-    // users.columns.add('decimal_col', { dataType: 'decimal(10,2)' });
+    
+    users.columns.add('bigint_col',      { dataType: 'bigint' });
+    users.columns.add('numeric_col',     { dataType: 'numeric(18,2)' });
+    
+    users.columns.add('double_col',      { dataType: 'double' });
+    users.columns.add('boolean_col',     { dataType: 'boolean' });
+    
+    users.columns.add('text_col',        { dataType: 'text' });
+    users.columns.add('char_col',        { dataType: 'char(10)' });
+
+    users.columns.add('date_col',        { dataType: 'date' });
+    users.columns.add('time_col',        { dataType: 'time' });
+    users.columns.add('timestamp_col',   { dataType: 'timestamp' });
+    
+    users.columns.add('json_col',        { dataType: 'json' });
+    users.columns.add('uuid_col',        { dataType: 'uuid' });
+    users.columns.add('bytes_col',        { dataType: 'bytes' });
 
     orders.columns.add('id', { dataType: 'int', primaryKey: true, autoIncrement: true, nullable: false });
     orders.columns.add('user_id', {
@@ -208,22 +212,23 @@ describe('[target: create-table-mysql8016.test.js]', () => {
       }
     };
 
-    expectType('id', 'int', 'INT');
-    expectType('email', 'varchar(255)', 'VARCHAR(255)');
-    expectType('name', 'varchar(100)', 'VARCHAR(100)');
-    expectType('created_at', 'timestamp', 'DATETIME');
+    expectType('id', 'int', 'INT(11)');
+    expectType('email', 'varchar(255)', 'VARCHAR');
+    expectType('name', 'varchar(100)', 'VARCHAR');
+
     expectType('bigint_col', 'bigint', 'BIGINT');
-    expectType('real_col', 'real', 'DOUBLE');
+    expectType('numeric_col', 'numeric(18, 2)', 'DECIMAL');
     expectType('double_col', 'double', 'DOUBLE');
-    // expectType('boolean_col', 'boolean', 'TINYINT(1)');
+    expectType('text_col', 'text', 'TEXT');
+    expectType('char_col', 'char(10)', 'CHAR');
+
     expectType('date_col', 'date', 'DATE');
     expectType('time_col', 'time', 'TIME');
-    expectType('timestamptz_col', 'timestamptz', 'TIMESTAMP');
-    expectType('varbinary_col', 'varbinary(255)', 'VARBINARY(255)');
-    // expectType('binary_col', 'binary(16)', 'BINARY(16)');
-    // expectType('blob_col', 'blob', 'LONGBLOB');
-    expectType('json_col', 'json', 'JSON');
-    expectType('uuid_col', 'uuid', 'CHAR(36)');
+    expectType('timestamp_col', 'timestamp', 'DATETIME');
+
+    expectType('json_col', 'json', 'LONGTEXT');
+    expectType('uuid_col', 'uuid', 'CHAR');
+    expectType('bytes_col', 'bytes', 'VARBINARY');
   });
 
   it('orders 테이블의 컬럼 자료형이 올바르게 생성되어야 한다', async () => {

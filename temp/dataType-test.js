@@ -12,7 +12,7 @@ const bb  = convertVendorToStandard('REAL', 'sqlite');     // 'double'
 console.log(bb);
 
 // 추가 예시
-const cc  = convertStandardToVendor('numeric(10,2)', 'postgres'); // 'NUMERIC(10,2)'
+const cc  = convertStandardToVendor('numeric(10, 2)', 'postgres'); // 'NUMERIC(10,2)'
 console.log(cc);
 
 const dd  = convertVendorToStandard('DOUBLE PRECISION', 'postgres'); // 'double'

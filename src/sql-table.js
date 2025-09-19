@@ -233,8 +233,9 @@ class SQLTable extends MetaTable {
         for (const [key, col] of this.columns.entries()) {
             const name = (typeof col.name === 'string' && col.name) ? col.name : key;
             const stdType = col.dataType || 'text';
-            const vendorType = convertStandardToVendor(stdType, vendor).toLowerCase();                // 표준 → 벤더 타입   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
-            // const vendorType = convertStandardToVendor(stdType, vendor);                // 표준 → 벤더 타입   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
+
+            const vendorType = col?.vendor?.[vendor]?.dataType || convertStandardToVendor(stdType, vendor).toLowerCase(); // 벤더 지정 우선, 없으면 변환   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
+            // const vendorType = convertStandardToVendor(stdType, vendor).toLowerCase();                // 표준 → 벤더 타입   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
 
             tb = tb.addColumn(name, vendorType, (c0) => {
                 let c = c0;

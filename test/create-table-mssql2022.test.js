@@ -76,17 +76,25 @@ describe('[target: create-table-mssql2022.test.js]', () => {
         users.columns.add('name',  { dataType: 'varchar(100)', nullable: false });
         // users.columns.add('created_at', { dataType: 'datetime', nullable: false});
         users.columns.add('bigint_col',      { dataType: 'bigint' });
-        users.columns.add('real_col',        { dataType: 'real' });
-        // users.columns.add('double_col',      { dataType: 'float' });
+        users.columns.add('numeric_col',      { dataType: 'numeric(10,2)' });
+        // users.columns.add('real_col',        { dataType: 'real' });
+        users.columns.add('double_col',      { dataType: 'double' });
+        users.columns.add('boolean_col',      { dataType: 'boolean' });
+
+        users.columns.add('text_col',      { dataType: 'text' });
+        users.columns.add('char_col',      { dataType: 'char' });
+
         // users.columns.add('boolean_col',     { dataType: 'bit' });
         users.columns.add('date_col',        { dataType: 'date' });
         users.columns.add('time_col',        { dataType: 'time' });
+        users.columns.add('timestamp_col',        { dataType: 'timestamp' });
         // users.columns.add('timestamptz_col', { dataType: 'datetimeoffset' });
-        users.columns.add('varbinary_col',   { dataType: 'varbinary(255)' });
-        users.columns.add('binary_col',      { dataType: 'binary(16)' });
+        // users.columns.add('varbinary_col',   { dataType: 'varbinary(255)' });
+        // users.columns.add('binary_col',      { dataType: 'binary(16)' });
         // users.columns.add('blob_col',        { dataType: 'varbinary(max)' });
-        // users.columns.add('json_col',        { dataType: 'nvarchar(max)' });
-        // users.columns.add('uuid_col',        { dataType: 'uniqueidentifier' });
+        users.columns.add('json_col',        { dataType: 'json' });
+        users.columns.add('uuid_col',        { dataType: 'uuid' });
+        users.columns.add('bytes_col',        { dataType: 'bytes' });
 
         orders = new SQLTable('orders');
         orders.connect = users.connect;
@@ -212,17 +220,23 @@ describe('[target: create-table-mssql2022.test.js]', () => {
         expectType('name', 'varchar(100)', 'VARCHAR');
         // expectType('created_at', 'datetime2', 'DATETIME2');
         expectType('bigint_col', 'bigint', 'BIGINT');
-        expectType('real_col', 'real', 'REAL');
+        expectType('numeric_col', 'numeric(18, 2)', 'NUMERIC');
+        expectType('double_col', 'double', 'FLOAT');
+        expectType('text_col', 'text', 'VARCHAR');
+        expectType('char_col', 'char(10)', 'CHAR');
+        //
+        // expectType('real_col', 'real', 'REAL');
         // expectType('double_col', 'float', 'FLOAT');
         // expectType('boolean_col', 'bit', 'BIT');
         expectType('date_col', 'date', 'DATE');
         expectType('time_col', 'time', 'TIME');
+        expectType('timestamp_col', 'timestamp', 'DATETIME');
         // expectType('timestamptz_col', 'datetimeoffset', 'DATETIMEOFFSET');
-        expectType('varbinary_col', 'varbinary(255)', 'VARBINARY');
-        expectType('binary_col', 'binary(16)', 'BINARY');
-        // expectType('blob_col', 'varbinary(max)', 'VARBINARY');
-        // expectType('json_col', 'nvarchar(max)', 'NVARCHAR');
-        // expectType('uuid_col', 'uniqueidentifier', 'UNIQUEIDENTIFIER');
+        // expectType('varbinary_col', 'varbinary(255)', 'VARBINARY');
+        // expectType('binary_col', 'binary(16)', 'BINARY');
+        expectType('json_col', 'json', 'VARCHAR');
+        expectType('uuid_col', 'uuid', 'VARCHAR');
+        expectType('bytes_col', 'bytes', 'VARBINARY');
     });
 
     it("orders 테이블의 컬럼 자료형이 올바르게 생성되어야 한다", async () => {

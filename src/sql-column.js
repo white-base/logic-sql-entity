@@ -8,19 +8,25 @@ class SQLColumn extends MetaColumn {
         super(p_name, p_entity, p_property);
 
         // SQL
-        this._defaultValue = null; // 기본값
-        this._dataType      = '';
-        this._nullable      = true;
-        this._primaryKey    = false;
-        this._autoIncrement = false;
-        this._references    = null;     // 외래키 참조 { table, column, onUpdate, onDelete }
-        this._indexes       = [];
-        this._unique        = false;
-        this._check         = null;     // 체크 제약조건
-        this._unsigned      = false;    // 부호 없는 숫자 MySQL, MariaDB 전용
-        this._isDynamic     = true;     // 동적 컬럼 여부 (default: true), 사용자가 직접값을 설정하지 않으면 true
-        this._virtual       = false;    // 가상 컬럼 여부
-
+        this._defaultValue      = null; // 기본값
+        this._dataType          = '';
+        this._nullable          = true;
+        this._primaryKey        = false;
+        this._autoIncrement     = false;
+        this._references        = null;     // 외래키 참조 { table, column, onUpdate, onDelete }
+        this._indexes           = [];
+        this._unique            = false;
+        this._check             = null;     // 체크 제약조건
+        this._unsigned          = false;    // 부호 없는 숫자 MySQL, MariaDB 전용
+        this._isDynamic         = true;     // 동적 컬럼 여부 (default: true), 사용자가 직접값을 설정하지 않으면 true
+        this._virtual           = false;    // 가상 컬럼 여부
+        this._vendor            = { 
+            mysql: { dataType: '', defaultValue: null }, 
+            mariadb: { dataType: '', defaultValue: null }, 
+            postgres: { dataType: '', defaultValue: null }, 
+            sqlite: { dataType: '', defaultValue: null }, 
+            mssql: { dataType: '', defaultValue: null } 
+        };  // 벤더별 데이터 타입
 
         if (p_property) this._load(p_property);
     }
@@ -244,6 +250,34 @@ class SQLColumn extends MetaColumn {
         this._virtual = !!v;
     }
 
+    /**
+     * 벤더별 설정 정보 
+     * 
+     * @returns {object} { mysql: { dataType, defaultValue }, mariadb: { dataType, defaultValue }, postgres: { dataType, defaultValue }, sqlite: { dataType, defaultValue }, mssql: { dataType, defaultValue } }
+     */
+    get vendor() { return this._vendor; }
+    set vendor(v) {
+        if (v !== null && typeof v !== 'object') {
+            throw new Error(`Invalid vendor value: ${v}`); // TODO: ExtendError 정의
+        }        
+        // 기존 구조를 복사하고, v의 값만 덮어쓰기
+        const base = { 
+            mysql: { dataType: '', defaultValue: null }, 
+            mariadb: { dataType: '', defaultValue: null }, 
+            postgres: { dataType: '', defaultValue: null }, 
+            sqlite: { dataType: '', defaultValue: null }, 
+            mssql: { dataType: '', defaultValue: null } 
+        };
+        if (v) {
+            for (const key of Object.keys(base)) {
+                if (v[key] && typeof v[key] === 'object') {
+                    base[key] = { ...base[key], ...v[key] };
+                }
+            }
+        }
+        this._vendor = base;
+    }
+
     _load(obj) {
         super._load(obj);
         if (obj.defaultValue !== undefined) this.defaultValue = obj.defaultValue;
@@ -258,6 +292,7 @@ class SQLColumn extends MetaColumn {
         if (obj.unsigned !== undefined) this.unsigned = obj.unsigned;
         if (obj.isDynamic !== undefined) this.isDynamic = obj.isDynamic;
         if (obj.virtual !== undefined) this.virtual = obj.virtual;
+        if (obj.vendor !== undefined) this.vendor = obj.vendor;
     }
 }
 

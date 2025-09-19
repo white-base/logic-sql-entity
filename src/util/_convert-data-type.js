@@ -39,83 +39,96 @@ function convertStandardToVendor(stdType, vendor) {
 
     const map = {
       sqlite() {
-        switch (type) {
-          case 'int':            return 'INTEGER';
-          case 'bigint':         return 'INTEGER'; // 64-bit 정수 저장 가능
-          case 'numeric':        return 'NUMERIC';
-          case 'double':         return 'REAL';
-          case 'boolean':        return 'INTEGER'; // 0/1
-          case 'varchar':        return 'TEXT';    // 길이는 메타로 관리
-          case 'text':           return 'TEXT';
-          case 'char':           return 'TEXT';    // CHAR(n) 의미 보장 어려움 → CHECK로 보완 권장
-          case 'date':           return 'NUMERIC'; // 또는 TEXT
-          case 'time':           return 'NUMERIC'; // 또는 TEXT
-          case 'timestamp':      return 'NUMERIC'; // 또는 TEXT (UTC 저장 권장)
-          case 'json':           return 'TEXT';    // JSON1 확장 사용 시 함수 제공
-          case 'uuid':           return 'TEXT';    // 함수/확장으로 생성 가능
-          case 'bytes':          return 'BLOB';
-          default:               return 'TEXT';
-        }
+          switch (type) {
+          case 'int': case 'bigint':     return 'INTEGER';
+          case 'numeric':                return 'NUMERIC';
+          case 'real': case 'double':    return 'REAL';
+          case 'boolean':                return 'INTEGER';   // 0/1
+          
+          case 'varchar': case 'text':   return 'TEXT';
+
+          case 'date': case 'time':
+          case 'timestamp': case 'timestamptz': return 'NUMERIC'; // 또는 TEXT
+
+          case 'binary': case 'varbinary': case 'blob': return 'BLOB';
+          case 'json':                    return 'TEXT';
+          case 'uuid':                    return 'TEXT';
+          case 'char':                    return `CHAR${L('(10)')}`;
+          default:                        return 'TEXT';
+          }
       },
       mysql() {
-        switch (type) {
-          case 'int':            return 'INTEGER';
-          case 'bigint':         return 'BIGINT';
-          case 'numeric':        return 'NUMERIC' + L('(18, 0)');   // 기본 정밀도 보정
-          case 'double':         return 'DOUBLE PRECISION';
-          case 'boolean':        return 'SMALLINT'; // TINYINT(1) 대신
-          case 'varchar':        return 'VARCHAR' + L('(255)');
-          case 'text':           return 'TEXT';
-          case 'char':           return 'CHAR' + L('(10)');
-          case 'date':           return 'DATE';
-          case 'time':           return 'TIME' + L('');
-          case 'timestamp':      return 'DATETIME' + L('');         // fractional precision은 args로
-          case 'json':           return 'JSON';
-          case 'uuid':           return 'CHAR(36)';                 // 또는 BINARY(16) 전략
-          case 'bytes':          return 'VARBINARY' + L('(255)');   // 큰 용량 필요 시 LONGBLOB로 승격은 스키마 옵션으로
-          default:               return 'LONGTEXT';
-        }
+          switch (type) {
+          case 'int':         return 'INTEGER';              // ← 'int' 대신 'integer'
+          case 'bigint':      return 'BIGINT';
+          case 'numeric':     return `NUMERIC${L('(18, 0)')}`;
+          // case 'numeric':     return `NUMERIC`;
+          case 'real':        return 'REAL';                // MySQL REAL은 DOUBLE alias인 경우가 많으나 안전하게 FLOAT
+          case 'double':      return 'REAL';
+          case 'boolean':     return 'TINYINT(1)';
+          case 'varchar':     return `VARCHAR${L('(255)')}`;
+          case 'text':        return 'LONGTEXT';
+          case 'date':        return 'DATE';
+          case 'time':        return 'TIME';
+          case 'timestamp':   return 'DATETIME';
+          case 'timestamptz': return 'TIMESTAMP';            // 타임존 의미는 앱 레벨 처리
+          case 'binary':      return `BINARY${L('(16)')}`;
+          case 'varbinary':   return `VARBINARY${L('(255)')}`;
+          case 'blob':        return 'LONGBLOB';
+          case 'json':        return 'JSON';
+          case 'uuid':        return 'CHAR(36)';            // 또는 BINARY(16)
+          case 'char':        return `CHAR${L('(10)')}`;
+          default:            return 'TEXT';
+          }
       },
       mariadb() { // 추가
           // MariaDB는 MySQL과 거의 동일
           return map.mysql();
       },
       postgres() {
-        switch (type) {
-          case 'int':            return 'INTEGER';
-          case 'bigint':         return 'BIGINT';
-          case 'numeric':        return 'NUMERIC' + L('');
-          case 'double':         return 'DOUBLE PRECISION';
-          case 'boolean':        return 'BOOLEAN';
-          case 'varchar':        return 'VARCHAR' + L('(255)');
-          case 'text':           return 'TEXT';
-          case 'char':           return 'CHAR' + L('(10)');
-          case 'date':           return 'DATE';
-          case 'time':           return 'TIME' + L('');
-          case 'timestamp':      return 'TIMESTAMP' + L('');
-          case 'json':           return 'JSONB';   // 공통(json) → PG에선 JSONB 채택
-          case 'uuid':           return 'UUID';
-          case 'bytes':          return 'BYTEA';
-          default:               return 'TEXT';
-        }
+          switch (type) {
+          case 'int':         return 'INTEGER';
+          case 'bigint':      return 'BIGINT';
+          case 'numeric':     return `NUMERIC${L('')}`;
+          case 'real':        return 'REAL';
+          case 'double':      return 'DOUBLE PRECISION';
+          case 'boolean':     return 'BOOLEAN';
+          case 'varchar':     return `VARCHAR${L('(255)')}`;
+          case 'text':        return 'TEXT';
+          case 'date':        return 'DATE';
+          case 'time':        return 'TIME';
+          case 'timestamp':   return 'TIMESTAMP';
+          case 'timestamptz': return 'TIMESTAMPTZ';
+          case 'binary':
+          case 'varbinary':
+          case 'blob':        return 'BYTEA';
+          case 'json':        return 'JSONB';
+          case 'uuid':        return 'UUID';
+          case 'char':        return `CHAR${L('(10)')}`;
+          default:            return 'TEXT';
+          }
       },
       mssql() {
-        switch (type) {
-          case 'int':            return 'INTEGER';
-          case 'bigint':         return 'BIGINT';
-          case 'numeric':        return 'NUMERIC' + (args.length ? L('') : '(18, 0)');
-          case 'double':         return 'DOUBLE PRECISION'; // FLOAT(53) ≈ double
-          case 'boolean':        return 'SMALLINT'; // TINYINT(1) 없음
-          case 'varchar':        return 'VARCHAR' + L('(255)');
-          case 'text':           return 'VARCHAR(8000)'; // NTEXT는 deprecated
-          case 'char':           return 'CHAR' + L('(10)');
-          case 'date':           return 'DATE';
-          case 'time':           return 'TIME' + L('');
-          case 'timestamp':      return 'DATETIME';
-          case 'json':           return 'VARCHAR(8000)'; // + CHECK(ISJSON(col)=1) 권장
-          case 'uuid':           return 'VARCHAR(36)';
-          case 'bytes':          return 'VARBINARY(8000)';
-          default:               return 'VARCHAR(8000)';
+          switch (type) {
+          case 'int':         return 'INTEGER';
+          case 'bigint':      return 'BIGINT';
+          case 'numeric':     return `DECIMAL${L('') || '(18,0)'}`;
+          case 'real':        return 'REAL';
+          case 'double':      return 'FLOAT(53)';
+          case 'boolean':     return 'BIT';
+          case 'varchar':     return `VARCHAR${L('(255)')}`;
+          case 'text':        return 'VARCHAR(MAX)';         // NTEXT deprecated
+          case 'date':        return 'DATE';
+          case 'time':        return 'TIME';
+          case 'timestamp':   return 'DATETIME2';
+          case 'timestamptz': return 'DATETIMEOFFSET';
+          case 'binary':      return `BINARY${L('(16)')}`;
+          case 'varbinary':   return `VARBINARY${L('(255)')}`;
+          case 'blob':        return 'VARBINARY(MAX)';
+          case 'json':        return 'NVARCHAR(MAX)';        // + ISJSON() 제약 권장
+          case 'uuid':        return 'UNIQUEIDENTIFIER';
+          case 'char':        return `CHAR${L('(10)')}`;
+          default:            return 'VARCHAR(MAX)';
         }
       },
 
@@ -289,8 +302,9 @@ function isStandardType(typeStr) {
   if (typeof typeStr !== 'string') return false;
   const { base } = parseType(typeStr);
   const stdTypes = [
-    'int', 'bigint', 'numeric', 'double', 'boolean',
-    'varchar', 'text', 'date', 'char', 'date', 'time', 'timestamp', 'json', 'uuid', 'bytes'
+    'int', 'bigint', 'numeric', 'real', 'double', 'boolean',
+    'varchar', 'text', 'date', 'time', 'timestamp', 'timestamptz',
+    'binary', 'varbinary', 'blob', 'json', 'uuid', 'char'
   ];
   return stdTypes.includes(base.replace(/\s+/g, ''));
 }

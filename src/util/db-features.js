@@ -1,17 +1,19 @@
 const defaultFeatureSet = {
-  supportsCTE: false,
-  supportsWindow: false,
-  supportsJsonType: false,
-  supportsJsonFuncs: false,
-  enforcesCheck: false,
-  supportsDescIndex: false,
-  hasReturning: false,
-  supportsUpsert: false,
-  supportsGeneratedCols: false,
-  supportsOutput: false,
-  supportsCreateOrAlter: false,
-  supportsOffsetFetch: false
+  supportsCTE: false,   // WITH (Common Table Expressions)
+  supportsWindow: false,  // 윈도우 함수 (WINDOW functions) row_number(), rank(), etc.
+  supportsJsonType: false,  // JSON 컬럼 타입
+  supportsJsonFuncs: false, // JSON 함수들
+  enforcesCheck: false, // CHECK 제약조건 강제
+  supportsDescIndex: false, // 내림차순 인덱스 지원 여부
+  hasReturning: false,  // INSERT ... RETURNING, UPDATE ... RETURNING
+  supportsUpsert: false,  // INSERT ... ON CONFLICT DO UPDATE / ON DUPLICATE KEY UPDATE 
+  supportsGeneratedCols: false, // 생성된 컬럼 (Generated Columns)
+  supportsOutput: false, // OUTPUT 절 (MSSQL)
+  supportsCreateOrAlter: false, // CREATE OR ALTER 문 (MSSQL)
+  supportsOffsetFetch: false  // OFFSET ... FETCH 절 (MSSQL)
 };
+
+
 
 function mergeFeatures(vendorFeatures) {
   return { ...defaultFeatureSet, ...vendorFeatures };
