@@ -1,16 +1,16 @@
 const defaultFeatureSet = {
-  supportsCTE: false,   // WITH (Common Table Expressions)
-  supportsWindow: false,  // 윈도우 함수 (WINDOW functions) row_number(), rank(), etc.
-  supportsJsonType: false,  // JSON 컬럼 타입
+  supportsCTE: false,       // DML CTE (Common Table Expressions) WITH ...
+  supportsWindow: false,    // DML 윈도우 함수
+  supportsJsonType: false,  // DDL JSON 타입
   supportsJsonFuncs: false, // JSON 함수들
-  enforcesCheck: false, // CHECK 제약조건 강제
-  supportsDescIndex: false, // 내림차순 인덱스 지원 여부
-  hasReturning: false,  // INSERT ... RETURNING, UPDATE ... RETURNING
-  supportsUpsert: false,  // INSERT ... ON CONFLICT DO UPDATE / ON DUPLICATE KEY UPDATE 
-  supportsGeneratedCols: false, // 생성된 컬럼 (Generated Columns)
-  supportsOutput: false, // OUTPUT 절 (MSSQL)
-  supportsCreateOrAlter: false, // CREATE OR ALTER 문 (MSSQL)
-  supportsOffsetFetch: false  // OFFSET ... FETCH 절 (MSSQL)
+  enforcesCheck: false,     // DDL + DML CHECK 제약조건 강제 여부
+  supportsDescIndex: false, // DDL 내림차순 인덱스
+  hasReturning: false,      // DML RETURNING 절
+  supportsUpsert: false,    // DML UPSERT (ON CONFLICT / ON DUPLICATE KEY)
+  supportsGeneratedCols: false, // DDL + DML 생성된 컬럼 (Generated Columns)
+  supportsOutput: false,    // DML OUTPUT 절 (MSSQL)
+  supportsCreateOrAlter: false,   // DDL CREATE OR ALTER (MSSQL)
+  supportsOffsetFetch: false  // DML OFFSET ... FETCH ... (MSSQL)
 };
 
 

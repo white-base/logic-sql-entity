@@ -18,9 +18,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    # platform: linux/amd64   # ARM(M1/M2)에서 오래된 버전 실행시 필요
+    platform: linux/amd64   # ARM(M1/M2)에서 오래된 버전 실행시 필요
 
-  mysql8012:
+  mysql8012: # REVIEW: kysely 권장
     image: mysql:8.0.12
     container_name: mysql8012
     environment:
@@ -31,7 +31,7 @@ services:
     volumes:
       - mysql8012data:/var/lib/mysql
     restart: unless-stopped
-    # platform: linux/amd64
+    platform: linux/amd64
 
   mysql8013:
     image: mysql:8.0.13
@@ -90,7 +90,7 @@ services:
     platform: linux/amd64
 
   mariadb105:
-    image: mariadb:10.5
+    image: mariadb:10.5 #REVIEW: 10.3+ 권장
     container_name: mariadb105
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root123}
@@ -103,7 +103,7 @@ services:
     platform: linux/amd64
 
   # ========== PostgreSQL ==========
-  postgres95:
+  postgres95: # REVIEW: kysely 지원 안함
     image: postgres:9.5
     container_name: postgres95
     environment:
