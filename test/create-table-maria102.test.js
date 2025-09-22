@@ -85,10 +85,10 @@ describe('[target: create-table-mysql8016.test.js]', () => {
     });
 
     const db = users.db;
-    await sql`SET FOREIGN_KEY_CHECKS = 0`.execute(db);
+    await sql`SET FOREIGN_KEY_CHECKS = 0`.execute(db);  // FK 제약조건 해제
     await sql`DROP TABLE IF EXISTS orders`.execute(db);
     await sql`DROP TABLE IF EXISTS users`.execute(db);
-    await sql`SET FOREIGN_KEY_CHECKS = 1`.execute(db);
+    await sql`SET FOREIGN_KEY_CHECKS = 1`.execute(db);  // FK 제약조건 설정
 
     await users.create();
     await orders.create();

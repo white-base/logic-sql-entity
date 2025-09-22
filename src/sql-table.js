@@ -134,6 +134,7 @@ class SQLTable extends MetaTable {
         await this._event.emit('created', { table: this, db: db });
     }
 
+    // 폐기
     async _create(trx) {
         
         const db = trx || this.db;
@@ -200,7 +201,6 @@ class SQLTable extends MetaTable {
         }
     }
 
-
     // ############################################
     /* ============================================================
     * 3-Stage DDL: Stage1 → Stage2 → Stage3
@@ -224,8 +224,6 @@ class SQLTable extends MetaTable {
             // await db.executeQuery(sql`PRAGMA foreign_keys = ON`);
         }
 
-        await this._event.emit('creating', { table: this, db, stage: 1, vendor, info });
-
         // 테이블 빌드: 컬럼/타입/NULL/기본값/autoInc/PK/UNIQUE
         let tb = db.schema.createTable(this.tableName);
 
@@ -233,9 +231,9 @@ class SQLTable extends MetaTable {
         for (const [key, col] of this.columns.entries()) {
             const name = (typeof col.name === 'string' && col.name) ? col.name : key;
             const stdType = col.dataType || 'text';
-
             const vendorType = col?.vendor?.[vendor]?.dataType || convertStandardToVendor(stdType, vendor).toLowerCase(); // 벤더 지정 우선, 없으면 변환   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
             // const vendorType = convertStandardToVendor(stdType, vendor).toLowerCase();                // 표준 → 벤더 타입   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
+            if (col.virual === true) continue; // 가상 컬럼 스킵
 
             tb = tb.addColumn(name, vendorType, (c0) => {
                 let c = c0;
@@ -244,6 +242,10 @@ class SQLTable extends MetaTable {
                 // PK는 뒤에서 복합처리도 하므로 단일 PK만 여기서 표시(복합은 제약으로 처리)
                 if (col.primaryKey === true) c = c.primaryKey();
                 if (col.unique === true)     c = c.unique();
+                if (col.check)      c = c.check(col.check);                                   // 체크 제약조건
+                if (vendor === 'mysql' || vendor === 'mariadb') {
+                    if (col.unsigned) c = c.unsigned(); // 부호 없는 숫자 (MySQL, MariaDB 전용)
+                }
                 // 기본값
                 c = applyDefault(c, col.defaultValue, vendor) || c;                       // defaultValue 규약 반영   [oai_citation:14‡apply-default.js](file-service://file-LSFSrpHpBxWGcmsNLD1EDw)
                 return c;
@@ -328,7 +330,6 @@ class SQLTable extends MetaTable {
                 );
             }
         }
-
         
         // 디버깅
         const node = tb.toOperationNode();
@@ -337,7 +338,6 @@ class SQLTable extends MetaTable {
         // console.log(compiled.parameters);
         
         await tb.execute();
-        await this._event.emit('created', { table: this, db, stage: 1, vendor, info });
     }
 
     /** Stage2: FK (SQLite는 스킵) */
@@ -373,8 +373,6 @@ class SQLTable extends MetaTable {
             )
             .execute();
         }
-
-        await this._event.emit('created', { table: this, db, stage: 2, vendor, info });
     }
 
     /** Stage3: 보조 인덱스 */
@@ -393,8 +391,6 @@ class SQLTable extends MetaTable {
         // UNIQUE 인덱스를 인덱스 레벨에서 만들고 싶으면 확장 가능(현재는 컬럼.unique로 제약을 생성)
         await builder.execute();
         }
-
-        await this._event.emit('created', { table: this, db, stage: 3, vendor, info });
     }
 
     /** 편의 메서드: 3단계 순차 실행 */

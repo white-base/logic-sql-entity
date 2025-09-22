@@ -20,7 +20,7 @@ services:
       retries: 10
     platform: linux/amd64   # ARM(M1/M2)에서 오래된 버전 실행시 필요
 
-  mysql8012: # REVIEW: kysely 권장
+  mysql8012: # REVIEW: 8.0.14 이상 권장
     image: mysql:8.0.12
     container_name: mysql8012
     environment:
@@ -103,7 +103,7 @@ services:
     platform: linux/amd64
 
   # ========== PostgreSQL ==========
-  postgres95: # REVIEW: kysely 지원 안함
+  postgres95:
     image: postgres:9.5
     container_name: postgres95
     environment:
@@ -121,7 +121,7 @@ services:
       retries: 10
     platform: linux/amd64
 
-  postgres12:
+  postgres12: #REVIEW: 10+ 권장
     image: postgres:12
     container_name: postgres12
     environment:
@@ -157,7 +157,7 @@ services:
       retries: 10
 
   # ========== SQL Server (Linux) ==========
-  mssql2017:
+  mssql2017:  #REVIEW: 2017 이상 권장
     image: mcr.microsoft.com/mssql/server:2017-latest
     container_name: mssql2017
     environment:

@@ -3,6 +3,10 @@ import Database from 'better-sqlite3'
 import { SQLTable } from '../src/sql-table.js';
 import { convertStandardToVendor } from '../src/util/convert-data-type.js'; // 추가
 
+/**
+ * 권장: SQLite 3.x (최신 안정판)
+ */
+
 describe("[target: create-table-test.js]", () => {
     let users, orders;
     let dbFile = 'mydb-test.sqlite';
@@ -56,9 +60,9 @@ describe("[target: create-table-test.js]", () => {
         orders.columns.add('created_at',{ dataType: 'timestamp',    nullable: false, defaultValue: { kind: 'now' }, indexes: ['ix_amount_created'] });
 
         const db = users.db;
-        await sql`PRAGMA foreign_keys = ON`.execute(db);
-        await sql`PRAGMA journal_mode = WAL`.execute(db);
-        await sql`PRAGMA synchronous = NORMAL`.execute(db);
+        await sql`PRAGMA foreign_keys = ON`.execute(db);    // FK 제약조건 설정
+        await sql`PRAGMA journal_mode = WAL`.execute(db);   // 동시성 및 복구력 향상
+        await sql`PRAGMA synchronous = NORMAL`.execute(db); // 성능 향상
 
         // 기존에 테이블이 있으면 삭제
         await sql`DROP TABLE IF EXISTS orders`.execute(db);
