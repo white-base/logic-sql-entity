@@ -10,7 +10,7 @@ const MSSQL_CONFIG = {
     user: process.env.MSSQL2022_USER ?? 'sa',
     password: process.env.MSSQL2022_PASSWORD ?? 'Your_password123',
     server: process.env.MSSQL2022_HOST ?? '127.0.0.1',
-    port: Number(process.env.MSSQL2022_PORT ?? '1435'),
+    port: Number(process.env.MSSQL2022_PORT ?? '1433'),
     database: process.env.MSSQL2022_DB ?? 'mydb',
     trustServerCertificate: true,
     enableArithAbort: true,

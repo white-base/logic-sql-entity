@@ -5,7 +5,7 @@ import { convertStandardToVendor } from '../src/util/convert-data-type.js'
 
 const MYSQL_CONFIG = {
   host: process.env.MYSQL8016_HOST ?? '127.0.0.1',
-  port: Number(process.env.MYSQL8016_PORT ?? '3311'),
+  port: Number(process.env.MYSQL8016_PORT ?? '3307'),
   user: process.env.MYSQL8016_USER ?? 'root',
   password: process.env.MYSQL8016_PASSWORD ?? 'root123',
   database: process.env.MYSQL8016_DB ?? 'mydb'
@@ -29,10 +29,10 @@ describe('[target: create-table-mysql8016.test.js]', () => {
     const conn = {
       dialect: new MysqlDialect({ pool }),
       log(event) {
-        if (event.level === 'query') {
+        // if (event.level === 'query') {
           console.log('SQL:', event.query.sql);
           console.log('Params:', event.query.parameters);
-        }
+        // }
       }
     };
 
@@ -91,7 +91,7 @@ describe('[target: create-table-mysql8016.test.js]', () => {
     await sql`SET FOREIGN_KEY_CHECKS = 1`.execute(db);  // FK 제약조건 설정
 
     await users.create();
-    await orders.create();
+    await orders.create(db);
   }, 20000);
 
   afterAll(async () => {
@@ -226,7 +226,7 @@ describe('[target: create-table-mysql8016.test.js]', () => {
     expectType('time_col', 'time', 'TIME');
     expectType('timestamp_col', 'timestamp', 'DATETIME');
 
-    expectType('json_col', 'json', 'LONGTEXT');
+    expectType('json_col', 'json', 'JSON');
     expectType('uuid_col', 'uuid', 'CHAR');
     expectType('bytes_col', 'bytes', 'VARBINARY');
   });
@@ -250,8 +250,8 @@ describe('[target: create-table-mysql8016.test.js]', () => {
       }
     };
 
-    expectType('id', 'int', 'INT');
-    expectType('user_id', 'int', 'INT');
+    expectType('id', 'int', 'INT(11)');
+    expectType('user_id', 'int', 'INT(11)');
     expectType('amount', 'int', 'INT(11)');
     expectType('created_at', 'timestamp', 'DATETIME');
   });

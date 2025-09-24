@@ -164,7 +164,7 @@ services:
       ACCEPT_EULA: "Y"
       SA_PASSWORD: ${SA_PASSWORD:-Your_password123}
     ports:
-      - "1433:1433"
+      - "1436:1433"
     volumes:
       - mssql2017data:/var/opt/mssql
     restart: unless-stopped

@@ -10,7 +10,7 @@ describe("[target: create-table-postgres15.test.js]", () => {
     let users, orders;
     const connectionString = process.env.POSTGRES_URL
         ?? process.env.KYSELY_POSTGRES_URL
-        ?? 'postgres://postgres:pg123@localhost:5435/mydb';
+        ?? 'postgres://postgres:pg123@localhost:5434/mydb';
 
     const normalizePostgresType = (column) => {
         const dataType = column.data_type;
