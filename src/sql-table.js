@@ -3,10 +3,11 @@
 import { MetaTable }                    from 'logic-entity';
 import { MetaTableColumnCollection }    from 'logic-entity';
 import { EventEmitter }                 from 'logic-entity';
-import { ExtendError }                  from 'logic-core';
-import { SQLRowCollection }             from './collection-sql-row.js';
+import { ExtendError }                  from 'logic-entity';
+import { MetaRow }                      from 'logic-entity';
+// import { SQLRowCollection }             from './collection-sql-row.js';
 import { SQLColumn }                    from './sql-column.js';
-import { SQLRow }                       from './sql-row.js';
+// import { SQLRow }                       from './sql-row.js';
 
 import { Kysely }                       from 'kysely'
 import { sql }                          from 'kysely'
@@ -27,9 +28,10 @@ class SQLTable extends MetaTable {
     constructor(p_name) {
         super(p_name);
 
-        this._rows        = new SQLRowCollection(this);
+        // this._rows        = new SQLRowCollection(this);
         // this._columns     = new MetaTableColumnCollection(this, SQLColumn);
         this.columns._baseType = SQLColumn; // 강제 설정
+        this.rows.autoChanges = false;
 
         this._connect     = null;
         this._db          = null;
@@ -37,17 +39,17 @@ class SQLTable extends MetaTable {
 
         this._event       = new EventEmitter();
         
-        /**
-         * 엔티티의 데이터(로우) 컬렉션
-         * 
-         * @readonly
-         * @member {MetaRowCollection} BaseEntity#rows
-         */
-        Object.defineProperty(this, 'rows', {
-            get: function() { return this._rows; },
-            configurable: true,
-            enumerable: true
-        });
+        // /**
+        //  * 엔티티의 데이터(로우) 컬렉션
+        //  * 
+        //  * @readonly
+        //  * @member {MetaRowCollection} BaseEntity#rows
+        //  */
+        // Object.defineProperty(this, 'rows', {
+        //     get: function() { return this._rows; },
+        //     configurable: true,
+        //     enumerable: true
+        // });
 
         // /**
         //  * 엔티티의 컬럼 컬렉션
@@ -96,22 +98,21 @@ class SQLTable extends MetaTable {
         this._profile = p;
     }
 
-    async onCreating(handler) {
+    onCreating(handler) {
         return this._event.on('creating', handler);
     }
 
-    async onCreated(handler) {
+    onCreated(handler) {
         return this._event.on('created', handler);
     }
 
-    async onDropping(handler) {
+    onDropping(handler) {
         return this._event.on('dropping', handler);
     }
 
-    async onDropped(handler) {
+    onDropped(handler) {
         return this._event.on('dropped', handler);
     }
-
 
     async init() {
         const info = await detectAndStoreDbInfo(this);
@@ -210,7 +211,7 @@ class SQLTable extends MetaTable {
     * ============================================================ */
 
     /** Stage1: 테이블/컬럼 + PK + UNIQUE (+SQLite는 FK 포함) */
-    async createStage1(trx) {
+    async createStage1(trx, options = { execute: true }) {
         const db = trx || this.db;
 
         // DB 정보 감지(벤더/버전) → features/vendortype에 사용
@@ -337,68 +338,77 @@ class SQLTable extends MetaTable {
         // console.log(compiled.sql);
         // console.log(compiled.parameters);
         
-        await tb.execute();
+        if (options.execute === true) await tb.execute();
+        return tb.compile();
     }
 
     /** Stage2: FK (SQLite는 스킵) */
-    async createStage2_FKs(trx) {
+    async createStage2_FKs(trx, options = { execute: true }) {
         const db = trx || this.db;
         const info = getDbInfo({ db, connect: { dialect: this._connect?.dialect } }) || 
                     await detectAndStoreDbInfo({ db, connect: { dialect: this._connect?.dialect } });
         const vendor = info?.flavor || info?.kind || (this.profile?.vendor ?? 'unknown');
+        const sql = [];
 
-        if (vendor === 'sqlite') return; // Stage1에서 완료
+        if (vendor === 'sqlite') return sql; // Stage1에서 완료
 
         await this._event.emit('creating', { table: this, db, stage: 2, vendor, info });
 
         const fkGroups = this._collectFkGroups();
         for (const [g, def] of fkGroups) {
-        await db.schema
-            .alterTable(this.tableName)
-            .addForeignKeyConstraint(
-            def.name || g,
-            def.cols,
-            def.refTable,
-            def.refCols,
-            (cb0) => {
-                let cb = cb0;
-                if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
-                if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
-                // match/deferrable: PG 한정. 필요 시 벤더 체크 후 적용.
-                if (def.opts?.match && vendor === 'postgres' && typeof cb.match === 'function') {
-                cb = cb.match(def.opts.match.toLowerCase());
+            let builder = db.schema
+                .alterTable(this.tableName)
+                .addForeignKeyConstraint(
+                def.name || g,
+                def.cols,
+                def.refTable,
+                def.refCols,
+                (cb0) => {
+                    let cb = cb0;
+                    if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
+                    if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
+                    // match/deferrable: PG 한정. 필요 시 벤더 체크 후 적용.
+                    if (def.opts?.match && vendor === 'postgres' && typeof cb.match === 'function') {
+                    cb = cb.match(def.opts.match.toLowerCase());
+                    }
+                    return cb;
                 }
-                return cb;
-            }
-            )
-            .execute();
+                );
+            
+            sql.push(builder.compile());
+            if (options.execute === true) await builder.execute();            
         }
+        return sql;
     }
 
     /** Stage3: 보조 인덱스 */
-    async createStage3_Indexes(trx) {
+    async createStage3_Indexes(trx, options = { execute: true }) {
         const db = trx || this.db;
         const info = getDbInfo({ db, connect: { dialect: this._connect?.dialect } }) || 
                     await detectAndStoreDbInfo({ db, connect: { dialect: this._connect?.dialect } });
         const vendor = info?.flavor || info?.kind || (this.profile?.vendor ?? 'unknown');
+        const sql = [];
 
         await this._event.emit('creating', { table: this, db, stage: 3, vendor, info });
 
         // 컬럼 메타 → 인덱스 그룹 수집(복합/단일 자동 분류)
         const indexDefs = collectIndexGroups(this.tableName, this.columns);          //  [oai_citation:15‡collect-index-group.js](file-service://file-WccUxnsqc1ad5caToyv7ey)
         for (const idx of indexDefs) {
-        let builder = db.schema.createIndex(idx.name).on(this.tableName).columns(idx.columns);
-        // UNIQUE 인덱스를 인덱스 레벨에서 만들고 싶으면 확장 가능(현재는 컬럼.unique로 제약을 생성)
-        await builder.execute();
-        }
+            let builder = db.schema.createIndex(idx.name).on(this.tableName).columns(idx.columns);
+            // UNIQUE 인덱스를 인덱스 레벨에서 만들고 싶으면 확장 가능(현재는 컬럼.unique로 제약을 생성)
+            
+            if (options.execute === true) await builder.execute();
+            sql.push(builder.compile());
     }
+    return sql;
+}
 
-    /** 편의 메서드: 3단계 순차 실행 */
-    async create3Stages(trx) {
-        await this.createStage1(trx);
-        await this.createStage2_FKs(trx);
-        await this.createStage3_Indexes(trx);
-    }
+    // /** 편의 메서드: 3단계 순차 실행 */
+    // async create3Stages(trx) {
+    //     await this.createStage1(trx);
+    //     await this.createStage2_FKs(trx);
+    //     await this.createStage3_Indexes(trx);
+    // }
 
     /* ================= 내부 유틸 ================= */
 
@@ -602,7 +612,7 @@ class SQLTable extends MetaTable {
         
         
         // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
-        if (p_row instanceof SQLRow || _isObject(p_row)) {
+        if (p_row instanceof MetaRow || _isObject(p_row)) {
             // this.rows.add(p_row);
             // TODO: p_row 에 대한 검사 필요
             const pk = 'id'
@@ -614,7 +624,7 @@ class SQLTable extends MetaTable {
     }
 
     async update(p_row) {
-        if (p_row instanceof SQLRow || _isObject(p_row)) {
+        if (p_row instanceof MetaRow || _isObject(p_row)) {
             // this.rows.update(p_row);
             // return await this.db.updateTable(this.tableName).values(p_row).execute();
             const pk = 'id'
@@ -632,7 +642,7 @@ class SQLTable extends MetaTable {
     }
 
     async delete(p_row) {
-        if (p_row instanceof SQLRow || _isObject(p_row)) {
+        if (p_row instanceof MetaRow || _isObject(p_row)) {
             const pk = 'id'
             const { [pk]: id } = p_row
             const res = await this.db
@@ -667,8 +677,20 @@ class SQLTable extends MetaTable {
         this.rows.commit();
     }
 
-    rejectChanges() {
+    async rejectChanges() {
         this.rows.rollback();
+        //TODO: DB에서 처리할 지 검토
+    }
+
+    async getCreateDDL() {
+        const sql = [];
+        const sql1 = await this.createStage1(null, { execute: false });
+        sql.push(sql1);
+        const sql2 = await this.createStage2_FKs(null, { execute: false });
+        if (sql2) sql.push(sql2);
+        const sql3 = await this.createStage3_Indexes(null, { execute: false });
+        if (sql3) sql.push(sql3);
+        return sql;
     }
 }
 

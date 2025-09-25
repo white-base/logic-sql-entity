@@ -64,7 +64,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         await db.destroy()
     })
 
-    test('INSERT & SELECT', async () => {
+    it('INSERT & SELECT', async () => {
         await db
             .insertInto('person')
             .values({ name: '홍길동', age: 30 }).execute()
@@ -75,7 +75,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         expect(rows[0].age).toBe(30)
     })
 
-    test('UPDATE', async () => {
+    it('UPDATE', async () => {
         await db
             .updateTable('person')
             .set({ age: 31 })
@@ -91,7 +91,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         expect(row?.age).toBe(31)
     })
 
-    test('DELETE', async () => {
+    it('DELETE', async () => {
         await db.deleteFrom('person').where('name', '=', '홍길동').execute()
 
         const rows = await db.selectFrom('person').selectAll().execute()
@@ -209,9 +209,29 @@ describe('Kysely + Jest (ESM JS)', () => {
         expect(table.getChanges().length).toBe(3);
         expect(table.rows.count).toBe(6);
 
-    })
+    });
 
-    // REVIE: docker로 mysql 서버 띄워서 테스트 해야함
+    it('getCreateDDL', async () => {
+        const table = new SQLTable('person');
+        const conn = {
+            dialect: new SqliteDialect({
+                database: new Database(':memory:')
+            })
+        };
+        table.connect = conn;
+        table.columns.add('id', { dataType: 'int', primaryKey: true, autoIncrement: true, nullable: false});
+        table.columns.add('email', { dataType: 'varchar(255)', unique: true, nullable: false, indexes: 'em' });
+        table.columns.add('updated_at', { dataType: 'timestamp', nullable: true, defaultValue: { kind: 'now' }, onUpdateValue: { kind: 'now' } });
+
+        const sql = await table.getCreateDDL();
+
+        expect(sql.length).toBe(3);
+        expect(sql[0].sql).toBe(`create table "person" ("id" integer not null primary key autoincrement, "email" text not null unique, "updated_at" numeric default CURRENT_TIMESTAMP, constraint "uq_person_email" unique ("email"))`);
+        // expect(sql[1]).toBe(`alter table person add constraint person_email_unique unique (email);`);
+        expect(sql[2][0].sql).toBe(`create index "idx_person_em_email" on "person" ("email")`);
+    });
+
+    // REVIEW: docker로 mysql 서버 띄워서 테스트 해야함
     it.skip('insert SQLTable3 mysql', async () => {
         const table = new SQLTable('person');
         const conn = {

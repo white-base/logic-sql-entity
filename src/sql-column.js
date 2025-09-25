@@ -2,6 +2,7 @@
 //==============================================================
 import { MetaColumn } from 'logic-entity';
 import { isStandardType } from './util/convert-data-type.js';
+import { convertStandardToVendor } from './util/convert-data-type.js';
 
 class SQLColumn extends MetaColumn {
     constructor(p_name, p_entity, p_property) {
@@ -28,7 +29,7 @@ class SQLColumn extends MetaColumn {
             mssql: { dataType: '', defaultValue: null } 
         };  // 벤더별 데이터 타입
 
-        if (p_property) this._load(p_property);
+        if (p_property) _load(this, p_property);
     }
 
     /**
@@ -218,6 +219,9 @@ class SQLColumn extends MetaColumn {
         this._check = v; 
     }
 
+    /**
+     * 부호 없는 숫자 설정 (MySQL, MariaDB 전용)
+     */
     get unsigned() { return this._unsigned; }
     set unsigned(v) {
         if (typeof v !== 'boolean') {
@@ -278,22 +282,52 @@ class SQLColumn extends MetaColumn {
         this._vendor = base;
     }
 
-    _load(obj) {
-        super._load(obj);
-        if (obj.defaultValue !== undefined) this.defaultValue = obj.defaultValue;
-        if (obj.dataType !== undefined) this.dataType = obj.dataType;
-        if (obj.nullable !== undefined) this.nullable = obj.nullable;
-        if (obj.primaryKey !== undefined) this.primaryKey = obj.primaryKey;
-        if (obj.autoIncrement !== undefined) this.autoIncrement = obj.autoIncrement;
-        if (obj.references !== undefined) this.references = obj.references;
-        if (obj.indexes !== undefined) this.indexes = obj.indexes;
-        if (obj.unique !== undefined) this.unique = obj.unique;
-        if (obj.check !== undefined) this.check = obj.check;
-        if (obj.unsigned !== undefined) this.unsigned = obj.unsigned;
-        if (obj.isDynamic !== undefined) this.isDynamic = obj.isDynamic;
-        if (obj.virtual !== undefined) this.virtual = obj.virtual;
-        if (obj.vendor !== undefined) this.vendor = obj.vendor;
+    // _load(obj) {
+    //     super._load(obj);
+    //     if (obj.defaultValue !== undefined) this.defaultValue = obj.defaultValue;
+    //     if (obj.dataType !== undefined) this.dataType = obj.dataType;
+    //     if (obj.nullable !== undefined) this.nullable = obj.nullable;
+    //     if (obj.primaryKey !== undefined) this.primaryKey = obj.primaryKey;
+    //     if (obj.autoIncrement !== undefined) this.autoIncrement = obj.autoIncrement;
+    //     if (obj.references !== undefined) this.references = obj.references;
+    //     if (obj.indexes !== undefined) this.indexes = obj.indexes;
+    //     if (obj.unique !== undefined) this.unique = obj.unique;
+    //     if (obj.check !== undefined) this.check = obj.check;
+    //     if (obj.unsigned !== undefined) this.unsigned = obj.unsigned;
+    //     if (obj.isDynamic !== undefined) this.isDynamic = obj.isDynamic;
+    //     if (obj.virtual !== undefined) this.virtual = obj.virtual;
+    //     if (obj.vendor !== undefined) this.vendor = obj.vendor;
+    // }
+
+    getVendorType(p_vendor) {
+        if (typeof p_vendor !== 'string' || p_vendor.trim() === '') {
+            throw new Error(`Invalid vendor value: ${p_vendor}`); // TODO: ExtendError 정의
+        }
+        const v = p_vendor.trim().toLowerCase();
+        if (!['mysql', 'mariadb', 'postgres', 'sqlite', 'mssql'].includes(v)) {
+            throw new Error(`Unsupported vendor: ${p_vendor}`); // TODO: ExtendError 정의
+        }
+        const vendorType = convertStandardToVendor(this.dataType, v);
+        return vendorType.toLowerCase();
     }
+}
+
+function _load(p_column, p_property) {
+    const obj = p_property;
+
+    if (obj.defaultValue !== undefined) p_column.defaultValue = obj.defaultValue;
+    if (obj.dataType !== undefined) p_column.dataType = obj.dataType;
+    if (obj.nullable !== undefined) p_column.nullable = obj.nullable;
+    if (obj.primaryKey !== undefined) p_column.primaryKey = obj.primaryKey;
+    if (obj.autoIncrement !== undefined) p_column.autoIncrement = obj.autoIncrement;
+    if (obj.references !== undefined) p_column.references = obj.references;
+    if (obj.indexes !== undefined) p_column.indexes = obj.indexes;
+    if (obj.unique !== undefined) p_column.unique = obj.unique;
+    if (obj.check !== undefined) p_column.check = obj.check;
+    if (obj.unsigned !== undefined) p_column.unsigned = obj.unsigned;
+    if (obj.isDynamic !== undefined) p_column.isDynamic = obj.isDynamic;
+    if (obj.virtual !== undefined) p_column.virtual = obj.virtual;
+    if (obj.vendor !== undefined) p_column.vendor = obj.vendor;
 }
 
 
