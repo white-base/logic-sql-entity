@@ -127,9 +127,9 @@ class SQLTable extends MetaTable {
         // pre-create event   TODO: 파라메터 정리 필요
         await this._event.emit('creating', { table: this, db: db });
 
-        await this.createStage1(trx);
-        await this.createStage2_FKs(trx);
-        await this.createStage3_Indexes(trx);
+        await this._createStage1(trx);
+        await this._createStage2_FKs(trx);
+        await this._createStage3_Indexes(trx);
 
         // post-create event
         await this._event.emit('created', { table: this, db: db });
@@ -211,7 +211,7 @@ class SQLTable extends MetaTable {
     * ============================================================ */
 
     /** Stage1: 테이블/컬럼 + PK + UNIQUE (+SQLite는 FK 포함) */
-    async createStage1(trx, options = { execute: true }) {
+    async _createStage1(trx, options = { execute: true }) {
         const db = trx || this.db;
 
         // DB 정보 감지(벤더/버전) → features/vendortype에 사용
@@ -343,7 +343,7 @@ class SQLTable extends MetaTable {
     }
 
     /** Stage2: FK (SQLite는 스킵) */
-    async createStage2_FKs(trx, options = { execute: true }) {
+    async _createStage2_FKs(trx, options = { execute: true }) {
         const db = trx || this.db;
         const info = getDbInfo({ db, connect: { dialect: this._connect?.dialect } }) || 
                     await detectAndStoreDbInfo({ db, connect: { dialect: this._connect?.dialect } });
@@ -352,7 +352,7 @@ class SQLTable extends MetaTable {
 
         if (vendor === 'sqlite') return sql; // Stage1에서 완료
 
-        await this._event.emit('creating', { table: this, db, stage: 2, vendor, info });
+        // await this._event.emit('creating', { table: this, db, stage: 2, vendor, info });
 
         const fkGroups = this._collectFkGroups();
         for (const [g, def] of fkGroups) {
@@ -382,14 +382,14 @@ class SQLTable extends MetaTable {
     }
 
     /** Stage3: 보조 인덱스 */
-    async createStage3_Indexes(trx, options = { execute: true }) {
+    async _createStage3_Indexes(trx, options = { execute: true }) {
         const db = trx || this.db;
         const info = getDbInfo({ db, connect: { dialect: this._connect?.dialect } }) || 
                     await detectAndStoreDbInfo({ db, connect: { dialect: this._connect?.dialect } });
         const vendor = info?.flavor || info?.kind || (this.profile?.vendor ?? 'unknown');
         const sql = [];
 
-        await this._event.emit('creating', { table: this, db, stage: 3, vendor, info });
+        // await this._event.emit('creating', { table: this, db, stage: 3, vendor, info });
 
         // 컬럼 메타 → 인덱스 그룹 수집(복합/단일 자동 분류)
         const indexDefs = collectIndexGroups(this.tableName, this.columns);          //  [oai_citation:15‡collect-index-group.js](file-service://file-WccUxnsqc1ad5caToyv7ey)
@@ -664,8 +664,8 @@ class SQLTable extends MetaTable {
         const tableName = this._name;
 
         for (const row of trans) {
-            const pk = 'id'
-            const { [pk]: id, ...changes } = row.ref
+            const pk = 'id';
+            const { [pk]: id, ...changes } = row.ref;
             if (row.cmd === 'I') {
                 await this.db.insertInto(tableName).values({ ...changes }).execute();
             } else if (row.cmd === 'U') {
@@ -682,14 +682,12 @@ class SQLTable extends MetaTable {
         //TODO: DB에서 처리할 지 검토
     }
 
-    async getCreateDDL() {
+    async getCreateDDL(trx) {
         const sql = [];
-        const sql1 = await this.createStage1(null, { execute: false });
-        sql.push(sql1);
-        const sql2 = await this.createStage2_FKs(null, { execute: false });
-        if (sql2) sql.push(sql2);
-        const sql3 = await this.createStage3_Indexes(null, { execute: false });
-        if (sql3) sql.push(sql3);
+
+        sql.push(await this.createStage1(trx, { execute: false })); // 재확인
+        sql.push(...await this.createStage2_FKs(trx, { execute: false }));
+        sql.push(...await this.createStage3_Indexes(trx, { execute: false }));
         return sql;
     }
 }
