@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 
-import { SQLRow } from '../src/sql-row.js';
+// import { SQLRow } from '../src/sql-row.js';
 
 //==============================================================
 // test

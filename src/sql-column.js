@@ -1,6 +1,6 @@
 /**** sql-column.js | SQLColumn ****/
 //==============================================================
-import { MetaColumn } from 'logic-entity';
+import { MetaColumn, ExtendError } from 'logic-entity';
 import { isStandardType } from './util/convert-data-type.js';
 import { convertStandardToVendor } from './util/convert-data-type.js';
 
@@ -123,34 +123,40 @@ class SQLColumn extends MetaColumn {
     */
     get references() { return this._references; }
     set references(v) {
-        if (v !== null && typeof v !== 'object') {
-            throw new Error(`Invalid references value: ${v}`); // TODO: ExtendError 정의
+        let ref = {};
+
+        if (typeof v === 'string' && v.includes('.')) ref.target = v;
+        else ref = v;
+
+        if (ref && (typeof ref.target !== 'string' || !ref.target.includes('.'))) {
+            throw new Error(`references.target must be in the format 'table.column'. Invalid value: ${ref?.target}`); // TODO: ExtendError 정의
         }
-        if (v && (typeof v.target !== 'string' || !v.target.includes('.'))) {
-            throw new Error(`references.target must be in the format 'table.column'. Invalid value: ${v?.target}`); // TODO: ExtendError 정의
+        if (ref !== null && typeof ref !== 'object') {
+            throw new Error(`Invalid references value: ${ref}`); // TODO: ExtendError 정의
         }
-        if (v && v.name && typeof v.name !== 'string') {
-            throw new Error(`references.name must be a string. Invalid value: ${v?.name}`); // TODO: ExtendError 정의
+        if (ref && ref.name && typeof ref.name !== 'string') {
+            throw new Error(`references.name must be a string. Invalid value: ${ref?.name}`); // TODO: ExtendError 정의
         }
-        if (v && v.group && typeof v.group !== 'string') {
-            throw new Error(`references.group must be a string. Invalid value: ${v?.group}`); // TODO: ExtendError 정의
+        if (ref && ref.group && typeof ref.group !== 'string') {
+            throw new Error(`references.group must be a string. Invalid value: ${ref?.group}`); // TODO: ExtendError 정의
         }
-        if (v && v.onUpdate && typeof v.onUpdate !== 'string') {
-            throw new Error(`references.onUpdate must be a string. Invalid value: ${v?.onUpdate}`); // TODO: ExtendError 정의
+        if (ref && ref.onUpdate && typeof ref.onUpdate !== 'string') {
+            throw new Error(`references.onUpdate must be a string. Invalid value: ${ref?.onUpdate}`); // TODO: ExtendError 정의
         }
-        if (v && v.onDelete && typeof v.onDelete !== 'string') {
-            throw new Error(`references.onDelete must be a string. Invalid value: ${v?.onDelete}`); // TODO: ExtendError 정의
+        if (ref && ref.onDelete && typeof ref.onDelete !== 'string') {
+            throw new Error(`references.onDelete must be a string. Invalid value: ${ref?.onDelete}`);
         }
-        if (v && v.match && typeof v.match !== 'string') {
-            throw new Error(`references.match must be a string. Invalid value: ${v?.match}`); // TODO: ExtendError 정의
+        if (ref && ref.match && typeof ref.match !== 'string') {
+            throw new Error(`references.match must be a string. Invalid value: ${ref?.match}`); // TODO: ExtendError 정의
         }
-        if (v && v.deferrable !== undefined && typeof v.deferrable !== 'boolean') {
-            throw new Error(`references.deferrable must be a boolean. Invalid value: ${v?.deferrable}`); // TODO: ExtendError 정의
+        if (ref && ref.deferrable !== undefined && typeof ref.deferrable !== 'boolean') {
+            throw new Error(`references.deferrable must be a boolean. Invalid value: ${ref?.deferrable}`); // TODO: ExtendError 정의
         }
-        if (v && v.initiallyDeferred !== undefined && typeof v.initiallyDeferred !== 'boolean') {
-            throw new Error(`references.initiallyDeferred must be a boolean. Invalid value: ${v?.initiallyDeferred}`); // TODO: ExtendError 정의
-        }   
-        this._references = v;
+        if (ref && ref.initiallyDeferred !== undefined && typeof ref.initiallyDeferred !== 'boolean') {
+            throw new Error(`references.initiallyDeferred must be a boolean. Invalid value: ${ref?.initiallyDeferred}`);
+        }
+
+        this._references = ref;
     }
     /**
      * 외래키 참조 설정 (references 의 alias)
@@ -319,8 +325,11 @@ function _load(p_column, p_property) {
     if (obj.dataType !== undefined) p_column.dataType = obj.dataType;
     if (obj.nullable !== undefined) p_column.nullable = obj.nullable;
     if (obj.primaryKey !== undefined) p_column.primaryKey = obj.primaryKey;
+    if (obj.pk !== undefined) p_column.primaryKey = obj.pk; // alias
     if (obj.autoIncrement !== undefined) p_column.autoIncrement = obj.autoIncrement;
+    if (obj.identity !== undefined) p_column.autoIncrement = obj.identity;  // alias
     if (obj.references !== undefined) p_column.references = obj.references;
+    if (obj.fk !== undefined) p_column.references = obj.fk; // alias
     if (obj.indexes !== undefined) p_column.indexes = obj.indexes;
     if (obj.unique !== undefined) p_column.unique = obj.unique;
     if (obj.check !== undefined) p_column.check = obj.check;

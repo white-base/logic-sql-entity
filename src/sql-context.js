@@ -10,6 +10,7 @@ import { sql } from 'kysely';
 
 import { detectAndStoreDbInfo } from './util/db-info.js';
 import { resolveDbFeatures } from './util/db-features.js';
+import { SQLTable } from './sql-table.js';
 
 // REVIEW: 개발후 제거
 import { viewTable } from '../temp/view-table.js';
@@ -18,8 +19,12 @@ class SQLContext extends MetaElement {
     constructor(p_name) {
         super(p_name);
 
+        this._ctxName = p_name;
+
         this._tables = new MetaTableCollection(this);
         this.tbl = this.tables; // tbl (alias)
+        this.tables._baseType = SQLTable;
+
         this._queries = new PropertyCollection(this);
         this.qry = this.queries; // qry (alias)
         this._contexts = new SQLContextCollection(this);
@@ -32,6 +37,17 @@ class SQLContext extends MetaElement {
         this._connect     = null;
         this._db          = null;
         this._profile     = { vendor: null, version: null, features: null }; // { vendor: 'mysql' | 'postgres' | 'sqlite' | 'mssql'
+    }
+
+    get ctxName() {
+        return this._ctxName;
+    }
+    set ctxName(p_name) {
+        if (!p_name || typeof p_name !== 'string' || p_name.length === 0) {
+            throw new Error('Invalid context name');    // TODO: message code
+        }
+        this._name = p_name;
+        this._ctxName = p_name;
     }
 
     get tables() {

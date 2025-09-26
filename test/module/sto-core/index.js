@@ -1,0 +1,28 @@
+import { SQLContext } from '../../../src/sql-context.js';
+
+const ctx_sto_core = new SQLContext('sto_core');
+
+ctx_sto_core.tables.add('sto_master');
+
+ctx_sto_core.tables['sto_master'].columns.add('sto_id', 
+    { pk: true, pk: true, dataType: 'varchar(10)' }
+);
+ctx_sto_core.tables['sto_master'].columns.add('sto_name',
+    { nullable: false, dataType: 'varchar(100)' }
+);
+ctx_sto_core.tables['sto_master'].columns.add('status_cd',
+    { nullable: false, dataType: 'char(2)' }
+);
+ctx_sto_core.tables['sto_master'].columns.add('create_dt',
+    { nullable: false, dataType: 'timestamp', defaultValue: { kind: 'now' } }
+);
+ctx_sto_core.tables['sto_master'].columns.add('update_dt',
+    { nullable: false, dataType: 'timestamp' }
+);
+ctx_sto_core.tables['sto_master'].columns.add('del_yn',
+    { nullable: false, dataType: 'char(1)', defaultValue: 'N' }
+);
+
+
+export default ctx_sto_core;
+export { ctx_sto_core };

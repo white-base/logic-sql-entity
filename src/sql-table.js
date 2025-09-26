@@ -685,9 +685,9 @@ class SQLTable extends MetaTable {
     async getCreateDDL(trx) {
         const sql = [];
 
-        sql.push(await this.createStage1(trx, { execute: false })); // 재확인
-        sql.push(...await this.createStage2_FKs(trx, { execute: false }));
-        sql.push(...await this.createStage3_Indexes(trx, { execute: false }));
+        sql.push(await this._createStage1(trx, { execute: false })); // 재확인
+        sql.push(...await this._createStage2_FKs(trx, { execute: false }));
+        sql.push(...await this._createStage3_Indexes(trx, { execute: false }));
         return sql;
     }
 }

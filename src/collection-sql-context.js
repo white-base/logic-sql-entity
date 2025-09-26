@@ -31,22 +31,33 @@ class SQLContextCollection extends PropertyCollection {
      * @returns {SQLContext} 등록한 아이템
      */
     add(p_key, p_context) {
-        // TODO: message code 추가
-        if (!p_key) throw new ExtendError(/EL05425/, null, [this.constructor.name]);
-        if (!(typeof p_key === 'string' && p_key.length > 0) && !(p_context instanceof SQLContext)) {
-            throw new ExtendError(/EL05426/, null, [this.constructor.name, typeof p_key, typeof p_context]);
+        let ctx = null;
+        let key;
+        
+        if (p_key instanceof SQLContext) {
+            ctx = p_key;
+            key = ctx.ctxName;
+        } else {
+            key = p_key;
+            ctx = p_context;
         }
-        if (p_context && !(p_context instanceof SQLContext)) {
-            throw new ExtendError(/EL05427/, null, [this.constructor.name, typeof p_context]);
+        
+        // TODO: message code 추가
+        if (!key) throw new ExtendError(/EL05425/, null, [this.constructor.name]);
+        if (!(typeof key === 'string' && key.length > 0) && !(ctx instanceof SQLContext)) {
+            throw new ExtendError(/EL05426/, null, [this.constructor.name, typeof key, typeof ctx]);
+        }
+        if (ctx && !(ctx instanceof SQLContext)) {
+            throw new ExtendError(/EL05427/, null, [this.constructor.name, typeof ctx]);
         }
 
         // 순환 검출: 추가하는 p_context 내에 현재 소유자(this._owner)가 포함되는지 검사
-        const ctx = (p_context instanceof SQLContext) ? p_context : null;
+        const reCtx = (ctx instanceof SQLContext) ? ctx : null;
         
         // ctx.connect = this._owner.connect; // 소유자의 connect 설정
         // ctx.db = this._owner.db;           // 소유자의 db 설정
 
-        if (ctx.getLoadContext().includes(this._owner)) {
+        if (reCtx.getLoadContext().includes(this._owner)) {
             console.warn('SQLContext 가 현재 _onwer 가 포함되어 있어, 순환구조를 갖습니다. 추가 모듈을 FK 롤 사용하는데 제한이 있습니다.');
         }
         
@@ -54,7 +65,7 @@ class SQLContextCollection extends PropertyCollection {
         //     // 요구 메시지: 경고만 출력하고 추가는 진행
         //     console.warn('SQLContext 가 현재 _onwer 가 포함되어 있어, 순환구조를 갖습니다. 추가 모듈을 FK 롤 사용하는데 제한이 있습니다.');
         // }
-        return super.add(p_key, p_context);
+        return super.add(key, ctx);
     }
 
     /**
