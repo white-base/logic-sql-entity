@@ -1,2 +1,31 @@
 <h1><%= title %></h1>
 <p><%= message %></p>
+<form action="/add" method="POST">
+<input type="text" name="name" placeholder="Name" required>
+<input type="number" name="age" placeholder="Age" required>
+<button type="submit">Add User</button>
+</form>
+<p>Total Users: <%= output.rows.count %></p>
+<table>
+<thead>
+    <tr><th>Name</th><th>Age</th><th>Action</th></tr>
+</thead>
+<tbody>
+    <% if (output.rows.length === 0) { %>
+    <tr><td colspan="3">No users found.</td></tr>
+    <% } else { %>
+    <% output.rows.forEach(function(user) { %>
+        <form action="/delete/<%= user.id %>" method="POST" style="display:inline">
+        <tr>
+        <td><input name="name" value="<%= user.name %>" /></td>
+        <td><input name="age" type="number" value="<%= user.age %>" /></td>
+        <td>
+            <button type="submit" formaction="/update/<%= user.id %>">Update</button>
+            <button type="submit" formaction="/delete/<%= user.id %>">Delete</button>
+            </td>
+        </tr>
+        </form>
+    <% }); %>
+    <% } %>
+</tbody>
+</table>
