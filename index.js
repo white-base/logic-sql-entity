@@ -46,7 +46,8 @@ export { MetaSet }                      from 'logic-entity';
 
 // local modules
 export { Message }                      from './src/message-wrap.js';  // message wrap
-export { SQLRowCollection }             from './src/collection-sql-row.js';
+// export { SQLRowCollection }             from './src/collection-sql-row.js';
 export { SQLColumn }                    from './src/sql-column.js';
-export { SQLRow }                       from './src/sql-row.js';
+// export { SQLRow }                       from './src/sql-row.js';
 export { SQLTable }                     from './src/sql-table.js';
+export { SQLContext }                   from './src/sql-context.js';

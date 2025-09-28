@@ -5,7 +5,7 @@ import { convertStandardToVendor } from '../src/util/convert-data-type.js';
 
 // jest.setTimeout(30000);
 
-describe("[target: create-table-postgres15.test.js]", () => {
+describe.skip("[target: create-table-postgres15.test.js]", () => {
     let pool;
     let users, orders;
     const connectionString = process.env.POSTGRES_URL

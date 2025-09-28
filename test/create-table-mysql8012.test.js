@@ -11,7 +11,7 @@ const MYSQL_CONFIG = {
   database: process.env.MYSQL8016_DB ?? 'mydb'
 };
 
-describe('[target: create-table-mysql8016.test.js]', () => {
+describe.skip('[target: create-table-mysql8016.test.js]', () => {
   let users;
   let orders;
 

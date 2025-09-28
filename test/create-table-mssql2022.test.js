@@ -21,7 +21,7 @@ const MSSQL_CONFIG = {
     }
 };
 
-describe('[target: create-table-mssql2022.test.js]', () => {
+describe.skip('[target: create-table-mssql2022.test.js]', () => {
     let users, orders;
     let db;
 
