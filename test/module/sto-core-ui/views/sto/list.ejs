@@ -4,6 +4,11 @@
 <input type="text" name="sto_id" placeholder="sto_id" required>
 <input type="text" name="sto_name" placeholder="sto_name" required>
 <input type="number" name="status_cd" placeholder="status_cd" required>
+<% for (const key in output.columns) { %>
+    <% if (output.columns[key].isDynamic && output.columns[key].visible) { %>
+        <input type="text" name="<%= key %>" placeholder="<%= key %>" <% if (output.columns[key].nullable) { %> required <% } %> >
+    <% } %>
+<% } %>
 <button type="submit">Add User</button>
 </form>
 <p>Total Users: <%= output.rows.count %></p>
@@ -17,15 +22,21 @@
     <% } else { %>
     <% output.rows.forEach(function(user) { %>
         <form action="/delete/<%= user.sto_id %>" method="POST" style="display:inline">
-        <tr>
-        <td><input name="sto_id" value="<%= user.sto_id %>" /></td>
-        <td><input name="sto_name" value="<%= user.sto_name %>" /></td>
-        <td><input name="status_cd" type="number" value="<%= user.status_cd %>" /></td>
-        <td>
-            <button type="submit" formaction="/update/<%= user.sto_id %>">Update</button>
-            <button type="submit" formaction="/delete/<%= user.sto_id %>">Delete</button>
+            <input type="hidden" name="sto_id" value="<%= user.sto_id %>" />
+            <tr>
+            <td><%= user.sto_id %></td>
+            <td><input name="sto_name" value="<%= user.sto_name %>" /></td>
+            <td><input name="status_cd" type="number" value="<%= user.status_cd %>" /></td>
+            <% for (const key in output.columns) { %>
+                <% if (output.columns[key].isDynamic) { %>
+                    <td><input name="<%= key %>" value="<%= user[key] %>" /></td>
+                <% } %>
+            <% } %>
+            <td>
+                <button type="submit" formaction="/update/<%= user.sto_id %>">Update</button>
+                <button type="submit" formaction="/delete/<%= user.sto_id %>">Delete</button>
             </td>
-        </tr>
+            </tr>
         </form>
     <% }); %>
     <% } %>

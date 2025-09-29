@@ -3,7 +3,7 @@ import {ctx_sto_core} from '../../sto-core/index.js';
 
 const table = ctx_sto_core.tables['sto_master'];
 
-export const list = async (req, res) => {
+export const list = async (req, res, layPage) => {
     const page = req.
     body?.page || 1;
     const size = req.body?.size || 10;
@@ -18,7 +18,7 @@ export const list = async (req, res) => {
     //         { sto_id: 'S003', sto_name: '스토어 3', status_cd: 'I', create_dt: '2023-01-03 12:00:00', update_dt: '2023-01-03 12:00:00', del_yn: 'N' },]
     // };
 
-    res.render('sto/list', { title: 'Home', message: 'Welcome!', output: table });
+    res.render('sto/list', { title: 'Home', message: 'Welcome!', output: table, layPage });
 };
 
 

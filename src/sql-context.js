@@ -511,11 +511,14 @@ class SQLContext extends MetaElement {
 
         if (typeof options.isDynamic !== 'boolean') options.isDynamic = true;
 
+
+        // TODO: 하위 스키마에 테이블이 있는지 검사
         if (this.tables.existTableName(tableName)) {
             this.tables[tableName].columns.add(column, options);
         } else {
             throw new Error(`Table '${tableName}' not found in context '${this.name}'.`);
         }
+
 
 
     }
