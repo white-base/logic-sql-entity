@@ -1,8 +1,9 @@
 <h1><%= title %></h1>
 <p><%= message %></p>
 <form action="/add" method="POST">
-<input type="text" name="name" placeholder="Name" required>
-<input type="number" name="age" placeholder="Age" required>
+<input type="text" name="sto_id" placeholder="sto_id" required>
+<input type="text" name="sto_name" placeholder="sto_name" required>
+<input type="number" name="status_cd" placeholder="status_cd" required>
 <button type="submit">Add User</button>
 </form>
 <p>Total Users: <%= output.rows.count %></p>
@@ -15,13 +16,14 @@
     <tr><td colspan="3">No users found.</td></tr>
     <% } else { %>
     <% output.rows.forEach(function(user) { %>
-        <form action="/delete/<%= user.id %>" method="POST" style="display:inline">
+        <form action="/delete/<%= user.sto_id %>" method="POST" style="display:inline">
         <tr>
-        <td><input name="name" value="<%= user.name %>" /></td>
-        <td><input name="age" type="number" value="<%= user.age %>" /></td>
+        <td><input name="sto_id" value="<%= user.sto_id %>" /></td>
+        <td><input name="sto_name" value="<%= user.sto_name %>" /></td>
+        <td><input name="status_cd" type="number" value="<%= user.status_cd %>" /></td>
         <td>
-            <button type="submit" formaction="/update/<%= user.id %>">Update</button>
-            <button type="submit" formaction="/delete/<%= user.id %>">Delete</button>
+            <button type="submit" formaction="/update/<%= user.sto_id %>">Update</button>
+            <button type="submit" formaction="/delete/<%= user.sto_id %>">Delete</button>
             </td>
         </tr>
         </form>

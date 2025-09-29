@@ -585,6 +585,9 @@ class SQLTable extends MetaTable {
         const limit = size > 0 ? size : 10;
         const offset = page > 1 ? (page - 1) * limit : 0;
         let rows = [];
+
+        if (this.connect == null) return rows;
+
         try {
             rows = await this.db
                 .selectFrom(this.tableName)
@@ -623,18 +626,68 @@ class SQLTable extends MetaTable {
         }
     }
 
+    // POINT: 여기서 할것
     async update(p_row) {
+        const change = {};
+
+
+        if (p_row instanceof MetaRow) {
+            for (let i = 0; i < p_row.count; i++) {
+                const key = p_row[i].columnName;
+                const col = p_row[i];
+                if(col.primaryKey === true) continue; // PK만 조건
+                if(col.virtual === true) continue;  // 가상 컬럼 스킵
+                change[key] = p_row[key];
+            }
+        } else if (_isObject(p_row)) {
+            
+        } else {
+            throw new Error('Invalid row type');
+        }
+
+
         if (p_row instanceof MetaRow || _isObject(p_row)) {
+            // const row = p_row instanceof MetaRow ? p_row.entries() : Object.entries(p_row);
+            
+            
             // this.rows.update(p_row);
             // return await this.db.updateTable(this.tableName).values(p_row).execute();
-            const pk = 'id'
-            const { [pk]: id, ...changes } = p_row
-            const res = await this.db
-                .updateTable(this.tableName)
-                .set(changes)
-                .where('id', '=', id)
-                .executeTakeFirst()
-            return { affectedRows: res.numUpdatedRows ?? 0 }
+            // const pk = 'id'
+            // const { [pk]: id, ...changes } = p_row
+            // const res = await this.db
+            //     .updateTable(this.tableName)
+            //     .set(changes)
+            //     .where('id', '=', id)
+            //     .executeTakeFirst()
+            // return { affectedRows: res.numUpdatedRows ?? 0 }
+
+            let query = await this.db.updateTable(this.tableName);
+            const change = {};
+
+            for (let i = 0, key, col; i < row.length; i++) {
+                const col = row[i];
+
+            }
+            
+            for ([key, col] of row) {
+                if(this.columns?.key.primaryKey === true) continue; // PK만 조건
+                if(this.columns?.key.virtual === true) continue;  // 가상 컬럼 스킵
+
+                change[col.columnName] = p_row[col.columnName];
+            }
+            // this.columns.forEach((col, key) => {
+            //     if(col.primaryKey === true) return; // PK만 조건
+            //     if(col.virtual !== true) return;  // 가상 컬럼 스킵
+            //     change[col.columnName] = p_row[col.columnName];
+            // });
+            query = query.set(change);
+
+            this.columns.forEach((col, key) => {
+                if(col.primaryKey !== true) return; // PK만 조건
+                if(col.virtual == true) return;  // 가상 컬럼 스킵
+                query = query.where(col.columnName, '=', row[col.columnName]);
+            });
+            await query.executeTakeFirst();
 
         } else {
             throw new Error('Invalid row type');
@@ -643,13 +696,15 @@ class SQLTable extends MetaTable {
 
     async delete(p_row) {
         if (p_row instanceof MetaRow || _isObject(p_row)) {
-            const pk = 'id'
-            const { [pk]: id } = p_row
-            const res = await this.db
-                .deleteFrom(this.tableName)
-                .where(pk, '=', id)
-                .executeTakeFirst()
-            return { affectedRows: res.numDeletedRows ?? 0 }
+            let query = await this.db.deleteFrom(this.tableName);
+            
+            this.columns.forEach((col, key) => {
+                if(col.primaryKey !== true) return; // PK만 조건
+                if(col.virtual === true) return;  // 가상 컬럼 스킵
+                query = query.where(col.columnName, '=', p_row[col.columnName]);
+            });
+            await query.executeTakeFirst();
+            // return { affectedRows: res.numDeletedRows ?? 0 }
 
         } else {
             throw new Error('Invalid row type');

@@ -49,7 +49,8 @@
     "prepare": "npm run build",
     "update": "npm update && npm run build",
     "build": "rollup -c --bundleConfigAsCjs",
-    "all": "npm run check && npm run build && npm run test"
+    "all": "npm run check && npm run build && npm run test",
+    "module": "node test/module/sto-core-ui/app.js"
   },
   "author": "logicfeel",
   "license": "MIT",

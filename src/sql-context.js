@@ -500,12 +500,24 @@ class SQLContext extends MetaElement {
     addColumn(tableName, column, options = {}) {
 
         // 컬럼을 동적으로 추가, 지정한 옵션으로
-        const table = this.tables.findByName(tableName);
-        if (table) {
-            table.columns.addValue(column.name, column);
+        // const table = this.tables.findByName(tableName);
+
+        if (!tableName || typeof tableName !== 'string' || tableName.length === 0) {
+            throw new Error('Invalid table name');
+        }
+        if (!column || typeof column !== 'string' || column.length === 0) {
+            throw new Error('Invalid column name');
+        }
+
+        if (typeof options.isDynamic !== 'boolean') options.isDynamic = true;
+
+        if (this.tables.existTableName(tableName)) {
+            this.tables[tableName].columns.add(column, options);
         } else {
             throw new Error(`Table '${tableName}' not found in context '${this.name}'.`);
         }
+
+
     }
 }
 

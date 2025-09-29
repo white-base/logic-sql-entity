@@ -2,7 +2,18 @@ import { sql }                          from 'kysely'
 
 export function applyDefault(colBuilder, def, vendor) {
 
-        if (!def) return colBuilder;
+    if (!def) return colBuilder;
+
+    if (typeof def === 'string' || typeof def === 'number' || typeof def === 'boolean') {
+        // 단순 리터럴
+        return colBuilder.defaultTo(def);
+    }
+
+    if (def instanceof Date) {
+        // 날짜 리터럴
+        return colBuilder.defaultTo(def.toISOString());
+    }
+
 
     switch (def.kind) {
         case 'literal':
