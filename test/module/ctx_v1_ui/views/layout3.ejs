@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title><%= title || '기본 제목' %></title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header>
+    <%- include('header') %>
+    <a href="/">Home</a> |
+    <a href="/sto-core">sto_master</a> |
+    <a href="/sto-account">sto_account</a> |
+    <a href="/admin/products">Products(Admin)</a>
+  </header>
+
+  <main>
+    <%- body %>
+  </main>
+</body>
+</html>

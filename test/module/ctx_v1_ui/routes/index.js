@@ -1,12 +1,17 @@
 import express from 'express';
 import * as ctrl from '../../sto-core-ui/controllers/index.js';
-import coreRoutes from '../../sto-core-ui/routes/index.js';
+// import coreRoutes, { menu as coreMenu } from '../../sto-core-ui/routes/index.js';
+import { menu as coreMenu, coreRoutes } from '../../sto-core-ui/routes/index.js';
 
 const router = express.Router();
+const menuMap = [];
+
+menuMap.push(coreMenu);
 
 router.use((req, res, next) => {
   if (typeof res.locals.title === 'undefined') {
     res.locals.title = '기본 제목';
+    res.locals.menuMap = menuMap;
   }
   next();
 });
