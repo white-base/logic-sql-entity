@@ -3,10 +3,10 @@ import {ctx_sto_core} from '../../sto-core/index.js';
 
 const table = ctx_sto_core.tables['sto_master'];
 
-export const list = async (req, res, layPage) => {
-    const page = req.
-    body?.page || 1;
+export const list = async (req, res, option) => {
+    const page = req.body?.page || 1;
     const size = req.body?.size || 10;
+    const basePath = option?.basePath || '';
 
     table.clear();
     await table.select(page, size);
@@ -18,29 +18,39 @@ export const list = async (req, res, layPage) => {
     //         { sto_id: 'S003', sto_name: '스토어 3', status_cd: 'I', create_dt: '2023-01-03 12:00:00', update_dt: '2023-01-03 12:00:00', del_yn: 'N' },]
     // };
 
-    res.render('sto/list', { title: 'Home', message: 'Welcome!', output: table, layPage });
+    res.render('sto-core/list', { title: 'Home', message: 'Welcome!', 
+        output: table, layout: option?.layout || 'layout', basePath: basePath  });
+
 };
+// list.path = '/sto-core';
+list.desc = '스토어 마스터';
+list.kind = 'show';
 
-
-export const add = async (req, res) => {
+export const add = async (req, res, option) => {
+    // const basePath = option?.basePath || '';
+    const basePath = req.baseUrl || '';
     // res.render('sto/add', { title: 'Add Store', message: 'Add a new store', output: {} });
 
     await table.insert(req.body);
-    res.redirect('/');
+    res.redirect(basePath + '/');
     // TODO: 저장후
     // list(req, res);
 };
 
-export const del = async (req, res) => {
+export const del = async (req, res, option) => {
     const sto_id = req.params.sto_id;
+    const basePath = option?.basePath || '';
+
     await table.delete({ sto_id: sto_id });
-    res.redirect('/');
+    res.redirect(basePath + '/');
 };
 
-export const update = async (req, res) => {
+export const update = async (req, res, option) => {
     // const sto_id = req.params.sto_id;
+    const basePath = option?.basePath || '';
+
     await table.update(req.body);
-    res.redirect('/');
+    res.redirect(basePath + '/');
 };
 
 // app.post('/delete/:id', async (req, res) => {

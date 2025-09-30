@@ -2,13 +2,14 @@
 import path from 'path';
 import express from 'express';
 import { fileURLToPath } from 'url';
-
+import expressLayouts from 'express-ejs-layouts';
+import cookieParser from 'cookie-parser';
+import logger from 'morgan';
 import routes from './routes/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
 
 import {ctx_sto_core} from '../sto-core/index.js';
 import { SqliteDialect } from 'kysely'
@@ -40,18 +41,20 @@ await ctx_sto_core.createSchema();
 // 테스트용 데이터 삽입
 await ctx_sto_core.tables[0].insert({sto_id: 'S001', sto_name: 'Store 1', status_cd: '01'});
 
-// app.use(expressLayouts);
+const app = express();
+
+app.use(expressLayouts);
 // 뷰 엔진 설정 (EJS 예시)
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
-// app.set('layout', 'layout');
+app.set('layout', 'layout');
 
 // 공통 미들웨어
-// app.use(logger('dev'));
+app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-// app.use(cookieParser());
-// app.use(express.static(path.join(__dirname, 'public')));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // 라우터 마운트(모든 feature 라우터는 routes/index.js에서 일괄 관리)
 app.use('/', routes);

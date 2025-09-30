@@ -1,6 +1,6 @@
 <h1><%= title %></h1>
 <p><%= message %></p>
-<form action="/add" method="POST">
+<form action="<%= basePath %>/add" method="POST">
 <input type="text" name="sto_id" placeholder="sto_id" required>
 <input type="text" name="sto_name" placeholder="sto_name" required>
 <input type="number" name="status_cd" placeholder="status_cd" required>
@@ -21,7 +21,7 @@
     <tr><td colspan="3">No users found.</td></tr>
     <% } else { %>
     <% output.rows.forEach(function(user) { %>
-        <form action="/delete/<%= user.sto_id %>" method="POST" style="display:inline">
+        <form action="<%= basePath %>/delete/<%= user.sto_id %>" method="POST" style="display:inline">
             <input type="hidden" name="sto_id" value="<%= user.sto_id %>" />
             <tr>
             <td><%= user.sto_id %></td>
@@ -33,8 +33,8 @@
                 <% } %>
             <% } %>
             <td>
-                <button type="submit" formaction="/update/<%= user.sto_id %>">Update</button>
-                <button type="submit" formaction="/delete/<%= user.sto_id %>">Delete</button>
+                <button type="submit" formaction="<%= basePath %>/update/<%= user.sto_id %>">Update</button>
+                <button type="submit" formaction="<%= basePath %>/delete/<%= user.sto_id %>">Delete</button>
             </td>
             </tr>
         </form>

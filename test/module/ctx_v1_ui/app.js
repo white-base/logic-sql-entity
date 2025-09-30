@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import expressLayouts from 'express-ejs-layouts';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
-
 import routes from './routes/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,7 +18,7 @@ import { sql } from 'kysely'
 
 const connect = {
     dialect: new SqliteDialect({
-        database: new Database('mydb-module.sqlite')  // 로컬에 파일로 생성
+        database: new Database('mydb-ctx.sqlite')  // 로컬에 파일로 생성
     }),
     log(event) {
       if (event.level === 'query') {
