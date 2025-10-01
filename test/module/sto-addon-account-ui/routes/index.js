@@ -1,6 +1,10 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
-import { stoRoutes, menu } from './store.js'
+import { stoAccountRoutes, menu } from './sto-account.js'
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const router = express.Router();
 const menuMap = [];
 
@@ -14,6 +18,6 @@ router.use((req, res, next) => {
   next();
 });
 
-router.use('/', stoRoutes);
+router.use('/', stoAccountRoutes);
 
 export default router;

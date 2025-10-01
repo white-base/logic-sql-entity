@@ -286,7 +286,7 @@ class SQLTable extends MetaTable {
 
         // 2) 복합 PK/UNIQUE (unique가 string 그룹이면 복합 UNIQUE)
         const pkCols = [];
-        const uniqueSingles = [];
+        // const uniqueSingles = [];
         const uniqueGroups = new Map(); // groupKey -> [col,...]
 
         for (const [key, col] of this.columns.entries()) {
@@ -297,17 +297,17 @@ class SQLTable extends MetaTable {
                 const g = col.unique.trim();
                 if (!uniqueGroups.has(g)) uniqueGroups.set(g, []);
                 uniqueGroups.get(g).push(name);
-            } else if (col.unique === true) {
-                uniqueSingles.push(name);
+            // } else if (col.unique === true) {
+            //     uniqueSingles.push(name);
             }
         }
 
         if (pkCols.length > 1) {
             tb = tb.addPrimaryKeyConstraint(`pk_${this.tableName}`, pkCols);
         }
-        for (const u of uniqueSingles) {
-            tb = tb.addUniqueConstraint(`uq_${this.tableName}_${u}`, [u]);
-        }
+        // for (const u of uniqueSingles) {
+        //     tb = tb.addUniqueConstraint(`uq_${this.tableName}_${u}`, [u]);
+        // }
         for (const [g, cols] of uniqueGroups) {
             tb = tb.addUniqueConstraint(`uq_${this.tableName}_${g}`, cols);
         }

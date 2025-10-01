@@ -6,17 +6,16 @@ import expressLayouts from 'express-ejs-layouts';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
 import routes from './routes/index.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-
 import {ctx_sto_core} from '../sto-core/index.js';
 import { SqliteDialect } from 'kysely'
 import Database from 'better-sqlite3'
 import { sql } from 'kysely'
 
-const connect = {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ctx = ctx_sto_core;
+  
+ctx.connect = {
     dialect: new SqliteDialect({
         database: new Database('mydb-module.sqlite')  // 로컬에 파일로 생성
     }),
@@ -26,20 +25,16 @@ const connect = {
       console.log('Params:', event.query.parameters);
       }
   }
-}
-ctx_sto_core.connect = connect;
+};
 
 // 동적 컬럼 추가
-await ctx_sto_core.addColumn('sto_master', 'add_temp', { dataType: 'varchar(50)' });
-
-await ctx_sto_core.init();  
-
-await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx_sto_core.db);
-
-await ctx_sto_core.createSchema();
-
+await ctx.addColumn('sto_master', 'add_temp', { dataType: 'varchar(50)' });
+// DB 초기화 및 스키마 생성
+await ctx.init();  
+await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx.db);
+await ctx.createSchema();
 // 테스트용 데이터 삽입
-await ctx_sto_core.tables[0].insert({sto_id: 'S001', sto_name: 'Store 1', status_cd: '01'});
+await ctx.tables[0].insert({sto_id: 'S001', sto_name: 'Default Store', status_cd: '01'});
 
 const app = express();
 
@@ -55,7 +50,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-
 // 라우터 마운트(모든 feature 라우터는 routes/index.js에서 일괄 관리)
 app.use('/', routes);
 

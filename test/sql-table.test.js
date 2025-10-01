@@ -226,7 +226,7 @@ describe('Kysely + Jest (ESM JS)', () => {
         const sql = await table.getCreateDDL();
 
         expect(sql.length).toBe(2);
-        expect(sql[0].sql).toBe(`create table "person" ("id" integer not null primary key autoincrement, "email" text not null unique, "updated_at" numeric default CURRENT_TIMESTAMP, constraint "uq_person_email" unique ("email"))`);
+        expect(sql[0].sql).toBe(`create table \"person\" (\"id\" integer not null primary key autoincrement, \"email\" text not null unique, \"updated_at\" numeric default CURRENT_TIMESTAMP)`);
         expect(sql[1].sql).toBe(`create index "idx_person_em_email" on "person" ("email")`);
     });
 

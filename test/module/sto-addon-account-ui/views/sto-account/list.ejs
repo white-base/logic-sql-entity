@@ -1,0 +1,40 @@
+<h1><%= title %></h1>
+<p><%= message %></p>
+<p>Total Users: <%= output.rows.count %></p>
+<table>
+<thead>
+    <tr><th>STO_ID</th><th>ID</th><th>PW</th><th>Name</th><th>USE</th><th>ETC</th><th>Create</th><th>Action</th></tr>
+</thead>
+<tbody>
+    <% if (output.rows.length === 0) { %>
+    <tr><td colspan="8">No users found.</td></tr>
+    <% } else { %>
+    <% output.rows.forEach(function(user) { %>
+        <form action="<%= basePath %>/delete/<%= user.sto_id %>" method="POST" style="display:inline">
+            <input type="hidden" name="acc_idx" value="<%= user.acc_idx %>" />
+            <tr>
+            <td><%= user.sto_id %></td>
+            <td><%= user.admin_id %></td>
+            <td><input name="admin_pw" value="<%= user.admin_pw %>" /></td>
+            <td><input name="admin_name" value="<%= user.admin_name %>" /></td>
+            <td>
+                <input type="checkbox" name="use_yn" value="Y" <%= user.use_yn === 'Y' ? 'checked' : '' %> />
+            </td>
+            <td>
+            <% for (const key in output.columns) { %>
+                <% if (output.columns[key].isDynamic) { %>
+                    <input name="<%= key %>" value="<%= user[key] %>" />
+                <% } %>
+            <% } %>
+            </td>
+            <td><%= user.create_dt %></td>
+            <td>
+                <button type="submit" formaction="<%= basePath %>/update/<%= user.acc_idx %>">Update</button>
+                <button type="submit" formaction="<%= basePath %>/del/<%= user.acc_idx %>">Delete</button>
+            </td>
+            </tr>
+        </form>
+    <% }); %>
+    <% } %>
+</tbody>
+</table>

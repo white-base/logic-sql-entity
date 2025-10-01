@@ -1,24 +1,13 @@
 <h1><%= title %></h1>
 <p><%= message %></p>
-<form action="<%= basePath %>/add" method="POST">
-<input type="text" name="sto_id" placeholder="sto_id" required>
-<input type="text" name="sto_name" placeholder="sto_name" required>
-<input type="number" name="status_cd" placeholder="status_cd" required>
-<% for (const key in output.columns) { %>
-    <% if (output.columns[key].isDynamic && output.columns[key].visible) { %>
-        <input type="text" name="<%= key %>" placeholder="<%= key %>" <% if (output.columns[key].nullable) { %> required <% } %> >
-    <% } %>
-<% } %>
-<button type="submit">Add User</button>
-</form>
 <p>Total Users: <%= output.rows.count %></p>
 <table>
 <thead>
-    <tr><th>Name</th><th>Age</th><th>Action</th></tr>
+    <tr><th>ID</th><th>Name</th><th>Age</th><th>ETC</th><th>Action</th></tr>
 </thead>
 <tbody>
     <% if (output.rows.length === 0) { %>
-    <tr><td colspan="3">No users found.</td></tr>
+    <tr><td colspan="5">No users found.</td></tr>
     <% } else { %>
     <% output.rows.forEach(function(user) { %>
         <form action="<%= basePath %>/delete/<%= user.sto_id %>" method="POST" style="display:inline">
@@ -27,14 +16,16 @@
             <td><%= user.sto_id %></td>
             <td><input name="sto_name" value="<%= user.sto_name %>" /></td>
             <td><input name="status_cd" type="number" value="<%= user.status_cd %>" /></td>
+            <td>
             <% for (const key in output.columns) { %>
                 <% if (output.columns[key].isDynamic) { %>
-                    <td><input name="<%= key %>" value="<%= user[key] %>" /></td>
+                    <input name="<%= key %>" value="<%= user[key] %>" />
                 <% } %>
             <% } %>
+            </td>
             <td>
                 <button type="submit" formaction="<%= basePath %>/update/<%= user.sto_id %>">Update</button>
-                <button type="submit" formaction="<%= basePath %>/delete/<%= user.sto_id %>">Delete</button>
+                <button type="submit" formaction="<%= basePath %>/del/<%= user.sto_id %>">Delete</button>
             </td>
             </tr>
         </form>

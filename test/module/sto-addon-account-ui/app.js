@@ -5,17 +5,19 @@ import { fileURLToPath } from 'url';
 import expressLayouts from 'express-ejs-layouts';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
-import routes, { viewPaths } from './routes/index.js';
-import { ctx_v1 } from '../ctx_v1/index.js';
+import routes from './routes/index.js';
+import { ctx_sto_account } from '../sto-addon-account/index.js';
 import { SqliteDialect } from 'kysely'
 import Database from 'better-sqlite3'
 import { sql } from 'kysely'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const connect = {
+const ctx = ctx_sto_account;
+
+ctx.connect = {
     dialect: new SqliteDialect({
-        database: new Database('mydb-ctx.sqlite')  // 로컬에 파일로 생성
+        database: new Database('mydb-module.sqlite')  // 로컬에 파일로 생성
     }),
     log(event) {
       if (event.level === 'query') {
@@ -23,37 +25,27 @@ const connect = {
       console.log('Params:', event.query.parameters);
       }
   }
-}
-ctx_v1.connect = connect;
+};
 
 // 동적 컬럼 추가
-// await ctx_v1.addColumn('sto_master', 'add_temp', { dataType: 'varchar(50)' });
+await ctx.addColumn('sto_account', 'add_temp', { dataType: 'varchar(50)' });
+await ctx.addColumn('sto_master', 'add_temp', { dataType: 'varchar(50)' });
 
-await ctx_v1.init();  
-
-// 순서 중요 : 단 sqlite 는 무관함
-await sql`DROP TABLE IF EXISTS meb_account`.execute(ctx_v1.db);
-await sql`DROP TABLE IF EXISTS sto_account`.execute(ctx_v1.db);
-await sql`DROP TABLE IF EXISTS meb_master`.execute(ctx_v1.db);
-await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx_v1.db);
-
-await ctx_v1.createSchema();
-
+// DB 초기화 및 스키마 생성
+await ctx.init();  
+await sql`DROP TABLE IF EXISTS sto_account`.execute(ctx.db);
+await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx.db);
+await ctx.createSchema();
 // 테스트용 데이터 삽입
-// await ctx_v1.tables[0].insert({sto_id: 'S001', sto_name: 'Store 1', status_cd: '01'});
+await ctx.getTable('sto_master').insert({sto_id: 'S001', sto_name: 'Default Store', status_cd: '01'});
+await ctx.getTable('sto_master').insert({sto_id: 'S002', sto_name: 'Another Store', status_cd: '01'});
+// await ctx.tables[0].insert({sto_id: 'S001', sto_name: 'Default Store', status_cd: '01'});
 
-// app.use(expressLayouts);
-// 뷰 엔진 설정 (EJS 예시)
 const app = express();
 
 app.use(expressLayouts);
-
-// app.set('views', [
-//   path.join(__dirname, 'views'),
-//   path.join(__dirname, '../sto-core-ui/views'),
-//   path.join(__dirname, '../sto-addon-account-ui/views')
-// ]);
-app.set('views', [path.join(__dirname, 'views'), ...viewPaths]);
+// 뷰 엔진 설정 (EJS 예시)
+app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.set('layout', 'layout');
 
@@ -63,7 +55,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-
 // 라우터 마운트(모든 feature 라우터는 routes/index.js에서 일괄 관리)
 app.use('/', routes);
 
@@ -80,7 +71,7 @@ app.use('/', routes);
 //   res.render('home/500', { title: 'Internal Server Error', error: err });
 // });
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3003;
 
 app.listen(PORT, () => {
   console.log(`Express server running: http://localhost:${PORT}`);

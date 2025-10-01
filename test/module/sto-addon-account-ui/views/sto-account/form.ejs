@@ -1,0 +1,23 @@
+<h1><%= title %></h1>
+<p><%= message %></p>
+<form action="<%= basePath %>/add" method="POST">
+<select name="sto_id" required>
+    <% store.rows.forEach(row => { %>
+        <option value="<%= row.sto_id %>"><%= row.sto_id %> - <%= row.sto_name %></option>
+    <% }) %>
+</select>
+<input type="text" name="admin_id" placeholder="admin_id" required>
+<input type="password" name="admin_pw" placeholder="admin_pw" required>
+<input type="text" name="admin_name" placeholder="admin_name" required>
+<label>
+    <input type="hidden" name="use_yn" value="">
+    <input type="checkbox" name="use_yn" value="Y">
+    use_yn
+</label>
+<% for (const key in output.columns) { %>
+    <% if (output.columns[key].isDynamic && output.columns[key].visible) { %>
+        <input type="text" name="<%= key %>" placeholder="<%= key %>" <% if (output.columns[key].nullable) { %> required <% } %> >
+    <% } %>
+<% } %>
+<button type="submit">Add User</button>
+</form>

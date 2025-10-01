@@ -1,32 +1,34 @@
 import express from 'express';
-import * as ctrl from '../../sto-core-ui/controllers/index.js';
-// import coreRoutes, { menu as coreMenu } from '../../sto-core-ui/routes/index.js';
-import { menu as coreMenu, coreRoutes } from '../../sto-core-ui/routes/index.js';
+// import * as ctrl from '../../sto-core-ui/controllers/index.js';
+import { menu as stoMenu, stoRoutes, viewPath as stoViewPath } from '../../sto-core-ui/routes/store.js'; // REVIEW: -> '@logicfeel/sto-core-ui/routes'
+import { menu as stoAccountMenu, stoAccountRoutes, viewPath as accoutViewPath } from '../../sto-addon-account-ui/routes/sto-account.js'; // REVIEW: -> '@logicfeel/sto-core-ui/routes'
+
 
 const router = express.Router();
 const menuMap = [];
+const layout = 'layout';
+const viewPaths = [stoViewPath, accoutViewPath];
 
-menuMap.push(coreMenu);
+stoMenu.basePath = '/sto-core';
+menuMap.push(stoMenu);
+
+stoAccountMenu.basePath = '/sto-account';
+menuMap.push(stoAccountMenu);
 
 router.use((req, res, next) => {
-  if (typeof res.locals.title === 'undefined') {
-    res.locals.title = '기본 제목';
-    res.locals.menuMap = menuMap;
+  if (typeof res.locals.baseTitle === 'undefined') {
+    res.locals.baseTitle = 'Manager'; // TODO: 검토 필요
   }
+  res.locals.menuMap = menuMap;
   next();
 });
 
-// router.get('/', (req, res) => ctrl.list(req, res, { layout: 'layouts/layout2' }));
 router.get('/', (req, res) => {
-    res.render('home', { layout: 'layout2' });
+    res.render('home', { layout });
 });
 
-// router.get('/', ctrl.list);
-// router.get('/sto-core', (req, res) => ctrl.list(req, res, { layout: 'layout2', basePath: '/sto-core' }));
-// router.post('/sto-core/add', (req, res) => ctrl.add(req, res, { basePath: '/sto-core' }));
-// router.post('/sto-core/delete/:sto_id', (req, res) => ctrl.del(req, res, { basePath: '/sto-core' }));
-// router.post('/sto-core/update/:sto_id', (req, res) => ctrl.update(req, res, { basePath: '/sto-core' }));
-
-router.use('/sto-core', coreRoutes); // /sto-core 경로로 마운트
+router.use(stoMenu.basePath, stoRoutes);
+router.use(stoAccountMenu.basePath, stoAccountRoutes);
 
 export default router;
+export { viewPaths }; 

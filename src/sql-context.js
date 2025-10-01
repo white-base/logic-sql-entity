@@ -512,15 +512,29 @@ class SQLContext extends MetaElement {
         if (typeof options.isDynamic !== 'boolean') options.isDynamic = true;
 
 
-        // TODO: 하위 스키마에 테이블이 있는지 검사
-        if (this.tables.existTableName(tableName)) {
-            this.tables[tableName].columns.add(column, options);
+        const table = this.getTable(tableName);
+
+        if (table) {
+            table.columns.add(column, options);
         } else {
             throw new Error(`Table '${tableName}' not found in context '${this.name}'.`);
         }
+    }
 
+    getTable(tableName) {
+        if (!tableName || typeof tableName !== 'string' || tableName.length === 0) {
+            throw new Error('Invalid table name');
+        }
 
-
+        if (this.tables.existTableName(tableName)) {
+            return this.tables[tableName];
+        }
+        for (let i = 0; i < this.contexts.length; i++) {
+            const ctx = this.contexts[i];
+            const table = ctx.getTable(tableName);
+            if (table) return table;
+        }
+        return null;
     }
 }
 
