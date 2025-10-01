@@ -7,7 +7,7 @@ import { menu as stoAccountMenu, stoAccountRoutes, viewPath as accoutViewPath } 
 const router = express.Router();
 const menuMap = [];
 const layout = 'layout';
-const viewPaths = [stoViewPath, accoutViewPath];
+const viewPaths = [stoViewPath, accoutViewPath];  // POINT: view path 정의
 
 stoMenu.basePath = '/sto-core';
 menuMap.push(stoMenu);
@@ -20,13 +20,15 @@ router.use((req, res, next) => {
     res.locals.baseTitle = 'Manager'; // TODO: 검토 필요
   }
   res.locals.menuMap = menuMap;
+  res.locals.layout = layout;  // 공통 layout 설정
   next();
 });
 
 router.get('/', (req, res) => {
-    res.render('home', { layout });
+    res.render('home', { layout: res.locals.layout });
 });
 
+// POINT: 라우터 등록
 router.use(stoMenu.basePath, stoRoutes);
 router.use(stoAccountMenu.basePath, stoAccountRoutes);
 

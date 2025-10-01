@@ -1,0 +1,103 @@
+<style>
+    .modern-detail-container {
+        max-width: 400px;
+        margin: 40px auto;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+        padding: 32px 24px;
+        font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    }
+    .modern-detail-container h1 {
+        font-size: 2rem;
+        margin-bottom: 8px;
+        color: #222;
+        text-align: center;
+    }
+    .modern-detail-container p {
+        color: #666;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+    .modern-detail-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .modern-detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #e5e7eb;
+        font-size: 1rem;
+    }
+    .modern-detail-item:last-child {
+        border-bottom: none;
+    }
+    .modern-detail-label {
+        color: #0078d4;
+        font-weight: 600;
+    }
+    .modern-detail-value {
+        color: #222;
+        font-weight: 400;
+    }
+    .modern-detail-actions {
+        margin-top: 24px;
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+    }
+    .modern-detail-actions button {
+        padding: 10px 24px;
+        background: linear-gradient(90deg, #0078d4 60%, #005fa3 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,120,212,0.08);
+        transition: background 0.2s;
+    }
+    .modern-detail-actions button:hover {
+        background: linear-gradient(90deg, #005fa3 60%, #0078d4 100%);
+    }
+</style>
+
+<div class="modern-detail-container">
+    <h1><%= title %></h1>
+    <p><%= message %></p>
+    <div class="modern-detail-list">
+        <div class="modern-detail-item">
+            <span class="modern-detail-label">스토어 ID</span>
+            <span class="modern-detail-value"><%= row.sto_id %></span>
+        </div>
+        <div class="modern-detail-item">
+            <span class="modern-detail-label">스토어명</span>
+            <span class="modern-detail-value"><input type="text" name="sto_name" placeholder="스토어명" required value="<%= row.sto_name %>"></span>
+        </div>
+        <div class="modern-detail-item">
+            <span class="modern-detail-label">상태 코드</span>
+            <span class="modern-detail-value"><input type="number" name="status_cd" value="<%= row.status_cd %>" placeholder="상태 코드" required></span>
+        </div>
+        <% for (const key in output.columns) { %>
+            <% if (output.columns[key].isDynamic && output.columns[key].visible) { %>
+                <div class="modern-detail-item">
+                    <span class="modern-detail-label"><%= key %></span>
+                    <!-- <span class="modern-detail-value"><%= row[key] %></span> -->
+                    <input type="text" name="<%= key %>" value="<%= row[key] %>" placeholder="<%= key %>" <% if (output.columns[key].nullable) { %> required <% } %> >
+                </div>
+            <% } %>
+        <% } %>
+    </div>
+    <div class="modern-detail-actions">
+        <form action="<%= basePath %>/update/<%= row.sto_id %>" method="GET" style="display:inline">
+            <button type="submit">수정</button>
+        </form>
+        <form action="<%= basePath %>/del/<%= row.sto_id %>" method="POST" style="display:inline">
+            <button type="submit">삭제</button>
+        </form>
+    </div>
+</div>

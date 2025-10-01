@@ -1,13 +1,71 @@
-<h1><%= title %></h1>
-<p><%= message %></p>
-<form action="<%= basePath %>/add" method="POST">
-<input type="text" name="sto_id" placeholder="sto_id" required>
-<input type="text" name="sto_name" placeholder="sto_name" required>
-<input type="number" name="status_cd" placeholder="status_cd" required>
-<% for (const key in output.columns) { %>
-    <% if (output.columns[key].isDynamic && output.columns[key].visible) { %>
-        <input type="text" name="<%= key %>" placeholder="<%= key %>" <% if (output.columns[key].nullable) { %> required <% } %> >
-    <% } %>
-<% } %>
-<button type="submit">Add User</button>
-</form>
+<style>
+    .modern-form-container {
+        max-width: 400px;
+        margin: 40px auto;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+        padding: 32px 24px;
+        font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    }
+    .modern-form-container h1 {
+        font-size: 2rem;
+        margin-bottom: 8px;
+        color: #222;
+        text-align: center;
+    }
+    .modern-form-container p {
+        color: #666;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+    .modern-form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .modern-form input {
+        padding: 12px 14px;
+        border: 1px solid #d0d0d0;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+        outline: none;
+    }
+    .modern-form input:focus {
+        border-color: #0078d4;
+        background: #f4f8ff;
+    }
+    .modern-form button {
+        padding: 12px 0;
+        background: linear-gradient(90deg, #0078d4 60%, #005fa3 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 10px;
+        box-shadow: 0 1px 4px rgba(0,120,212,0.08);
+        transition: background 0.2s;
+    }
+    .modern-form button:hover {
+        background: linear-gradient(90deg, #005fa3 60%, #0078d4 100%);
+    }
+</style>
+
+<div class="modern-form-container">
+    <h1><%= title %></h1>
+    <p><%= message %></p>
+    <form class="modern-form" action="<%= basePath %>/add" method="POST">
+        <input type="text" name="sto_id" placeholder="스토어 ID" required>
+        <input type="text" name="sto_name" placeholder="스토어명" required>
+        <input type="number" name="status_cd" placeholder="상태 코드" required>
+        <% for (const key in output.columns) { %>
+            <% if (output.columns[key].isDynamic && output.columns[key].visible) { %>
+                <input type="text" name="<%= key %>" placeholder="<%= key %>" <% if (output.columns[key].nullable) { %> required <% } %> >
+            <% } %>
+        <% } %>
+        <button type="submit">저장</button>
+    </form>
+</div>

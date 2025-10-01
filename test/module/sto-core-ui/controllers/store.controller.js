@@ -30,6 +30,24 @@ export const form = (req, res, option) => {
     });
 };
 
+export const detail = async (req, res, option) => {
+    const basePath = req.baseUrl || '';
+    const sto_id = req.params.id;
+
+    table.clear();
+    await table.select(1, 1, { sto_id: sto_id });
+
+    res.render('store/detail', {
+        title: 'Store View',
+        message: 'View store details',
+        output: table,
+        row: table.rows[0],
+        layout: option?.layout || 'layout',
+        basePath: req.baseUrl
+    });
+};
+
+
 export const add = async (req, res, option) => {
     const basePath = req.baseUrl || '';
 
@@ -38,7 +56,7 @@ export const add = async (req, res, option) => {
 };
 
 export const del = async (req, res, option) => {
-    const sto_id = req.params.sto_id;
+    const sto_id = req.params.id;
     const basePath = req.baseUrl || '';
 
     await table.delete({ sto_id: sto_id });

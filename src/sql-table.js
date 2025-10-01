@@ -580,7 +580,8 @@ class SQLTable extends MetaTable {
         await this._event.emit('dropped', { table: this, db: db });
     }
 
-    async select(page = 1, size = 10) {
+    // TODO: select 수정필요, 전달 where 조건 등
+    async select(page = 1, size = 10, where = {}) {
         // page: 1부터 시작, size: 페이지당 row 수
         const limit = size > 0 ? size : 10;
         const offset = page > 1 ? (page - 1) * limit : 0;
@@ -589,12 +590,20 @@ class SQLTable extends MetaTable {
         if (this.connect == null) return rows;
 
         try {
-            rows = await this.db
+            let query = this.db
                 .selectFrom(this.tableName)
                 .selectAll()
                 .limit(limit)
-                .offset(offset)
-                .execute();
+                .offset(offset);
+
+            for (const key in where) {
+                if (this.columns.existColumnName(key) === false) continue;
+                if (Object.prototype.hasOwnProperty.call(where, key)) {
+                    query = query.where(key, '=', where[key]);
+                }
+            }
+            rows = await query.execute();
+
         } catch (err) {
             if (err.message && err.message.includes('no such table')) {
                 throw new Error(`테이블(${this.tableName})이 존재하지 않습니다.`);

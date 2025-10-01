@@ -53,7 +53,7 @@ app.use(expressLayouts);
 //   path.join(__dirname, '../sto-core-ui/views'),
 //   path.join(__dirname, '../sto-addon-account-ui/views')
 // ]);
-app.set('views', [path.join(__dirname, 'views'), ...viewPaths]);
+app.set('views', [path.join(__dirname, 'views'), ...viewPaths]);  // POINT: view path 병합
 app.set('view engine', 'ejs');
 app.set('layout', 'layout');
 

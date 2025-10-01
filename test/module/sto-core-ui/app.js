@@ -31,6 +31,9 @@ ctx.connect = {
 await ctx.addColumn('sto_master', 'add_temp', { dataType: 'varchar(50)' });
 // DB 초기화 및 스키마 생성
 await ctx.init();  
+await sql`DROP TABLE IF EXISTS meb_account`.execute(ctx.db);
+await sql`DROP TABLE IF EXISTS sto_account`.execute(ctx.db);
+await sql`DROP TABLE IF EXISTS meb_master`.execute(ctx.db);
 await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx.db);
 await ctx.createSchema();
 // 테스트용 데이터 삽입
