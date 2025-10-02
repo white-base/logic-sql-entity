@@ -1,120 +1,45 @@
-
-<style>
-    .modern-list-container {
-        max-width: 900px;
-        margin: 40px auto;
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 2px 16px rgba(0,0,0,0.08);
-        padding: 32px 24px;
-        font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
-    }
-    .modern-list-container h1 {
-        font-size: 2rem;
-        margin-bottom: 8px;
-        color: #222;
-        text-align: center;
-    }
-    .modern-list-container p {
-        color: #666;
-        text-align: center;
-        margin-bottom: 24px;
-    }
-    .modern-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        margin-bottom: 12px;
-        background: #fafbfc;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 1px 4px rgba(0,120,212,0.04);
-    }
-    .modern-table th, .modern-table td {
-        padding: 12px 10px;
-        text-align: left;
-        border-bottom: 1px solid #e5e7eb;
-        font-size: 1rem;
-    }
-    .modern-table th {
-        background: #f4f8ff;
-        color: #0078d4;
-        font-weight: 600;
-        border-bottom: 2px solid #d0d0d0;
-    }
-    .modern-table tr:last-child td {
-        border-bottom: none;
-    }
-    .modern-table input {
-        padding: 8px 10px;
-        border: 1px solid #d0d0d0;
-        border-radius: 6px;
-        font-size: 1rem;
-        outline: none;
-        width: 100%;
-        box-sizing: border-box;
-        background: #fff;
-        transition: border-color 0.2s;
-    }
-    .modern-table input:focus {
-        border-color: #0078d4;
-        background: #f4f8ff;
-    }
-    .modern-table button {
-        padding: 8px 18px;
-        background: linear-gradient(90deg, #0078d4 60%, #005fa3 100%);
-        color: #fff;
-        border: none;
-        border-radius: 6px;
-        font-size: 1rem;
-        font-weight: 500;
-        cursor: pointer;
-        margin-right: 6px;
-        box-shadow: 0 1px 4px rgba(0,120,212,0.08);
-        transition: background 0.2s;
-    }
-    .modern-table button:last-child {
-        margin-right: 0;
-    }
-    .modern-table button:hover {
-        background: linear-gradient(90deg, #005fa3 60%, #0078d4 100%);
-    }
-</style>
-
-<div class="modern-list-container">
-    <h1><%= title %></h1>
-    <p><%= message %></p>
-    <p>Total Users: <%= output.rows.count %></p>
-    <table class="modern-table">
-        <thead>
-            <tr><th>ID</th><th>Name</th><th>Age</th><th>ETC</th><th>Action</th></tr>
-        </thead>
-        <tbody>
-            <% if (output.rows.length === 0) { %>
-                <tr><td colspan="5">No users found.</td></tr>
-            <% } else { %>
-                <% output.rows.forEach(function(user) { %>
-                    <tr>
-                        <form action="<%= basePath %>/delete/<%= user.sto_id %>" method="POST" style="display:inline">
-                            <input type="hidden" name="sto_id" value="<%= user.sto_id %>" />
-                            <td><a href="<%= basePath %>/detail/<%= user.sto_id %>" style="color: #0078d4; text-decoration: none;"><%= user.sto_id %></a></td>
-                            <td><input name="sto_name" value="<%= user.sto_name %>" /></td>
-                            <td><input name="status_cd" type="number" value="<%= user.status_cd %>" /></td>
-                            <td>
-                                <% for (const key in output.columns) { %>
-                                    <% if (output.columns[key].isDynamic) { %>
-                                        <input name="<%= key %>" value="<%= user[key] %>" />
-                                    <% } %>
+<h1 class="mt-4 mb-3"><%= title %></h1>
+<div class="alert alert-info"><%= message %></div>
+<p class="mb-3">Total Users: <span class="badge bg-primary"><%= output.rows.count %></span></p>
+<table class="table table-bordered table-hover align-middle">
+    <thead class="table-dark">
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>ETC</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <% if (output.rows.length === 0) { %>
+            <tr>
+                <td colspan="5" class="text-center">No users found.</td>
+            </tr>
+        <% } else { %>
+            <% output.rows.forEach(function(user) { %>
+                <tr>
+                    <form action="<%= basePath %>/delete/<%= user.sto_id %>" method="POST" style="display:inline">
+                        <input type="hidden" name="sto_id" value="<%= user.sto_id %>" />
+                        <td><%= user.sto_id %></td>
+                        <td><%= user.sto_name %></td>
+                        <td class="text-center"><%= user.status_cd %></td>
+                        <td>
+                            <% for (const key in output.columns) { %>
+                                <% if (output.columns[key].isDynamic) { %>
+                                    <span class="me-3">
+                                        <span class="fw-semibold"><%= key %>:</span>
+                                        <span><%= user[key] %></span>
+                                    </span>
                                 <% } %>
-                            </td>
-                            <td>
-                                <button type="submit" formaction="<%= basePath %>/update/<%= user.sto_id %>">수정</button>
-                                <button type="submit" formaction="<%= basePath %>/del/<%= user.sto_id %>">삭제</button>
-                            </td>
-                        </form>
-                    </tr>
-                <% }); %>
-            <% } %>
-        </tbody>
-    </table>
-</div>
+                            <% } %>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="location.href='<%= basePath %>/detail/<%= user.sto_id %>'">수정</button>
+                        </td>
+                    </form>
+                </tr>
+            <% }); %>
+        <% } %>
+    </tbody>
+</table>

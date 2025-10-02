@@ -136,71 +136,71 @@ class SQLTable extends MetaTable {
     }
 
     // 폐기
-    async _create(trx) {
+    // async _create(trx) {
         
-        const db = trx || this.db;
+    //     const db = trx || this.db;
 
-        // pre-create event   TODO: 파라메터 정리 필요
-        await this._event.emit('creating', { table: this, db: db });
+    //     // pre-create event   TODO: 파라메터 정리 필요
+    //     await this._event.emit('creating', { table: this, db: db });
 
-        // table creation
-        let tableBuilder = db.schema.createTable(this.tableName);
-        for (const [key, col] of this.columns.entries()) {
-            const options = normalizeOptions(col);
-            const name = (typeof col.name === 'string' && col.name) ? col.name : key;
-            const type = col.dataType || 'text';
-            tableBuilder = tableBuilder.addColumn(name, type, options);
-        }
-        await tableBuilder.execute();
+    //     // table creation
+    //     let tableBuilder = db.schema.createTable(this.tableName);
+    //     for (const [key, col] of this.columns.entries()) {
+    //         const options = normalizeOptions(col);
+    //         const name = (typeof col.name === 'string' && col.name) ? col.name : key;
+    //         const type = col.dataType || 'text';
+    //         tableBuilder = tableBuilder.addColumn(name, type, options);
+    //     }
+    //     await tableBuilder.execute();
 
 
-        // foreign key creation
+    //     // foreign key creation
 
-        // index creation
-        const indexDefs = collectIndexGroups(this.tableName, this.columns);
-        for (const indexDef of indexDefs) {
-            // const isSqlite = this._connect?.dialect?.constructor?.name === 'SqliteDialect';
+    //     // index creation
+    //     const indexDefs = collectIndexGroups(this.tableName, this.columns);
+    //     for (const indexDef of indexDefs) {
+    //         // const isSqlite = this._connect?.dialect?.constructor?.name === 'SqliteDialect';
             
-            if (this.profile.vendor === 'sqlite') {
-                await db.schema.createIndex(indexDef.name)
-                    .on(this.tableName)
-                    .columns(indexDef.columns)
-                    .execute();
-            }
-        }
+    //         if (this.profile.vendor === 'sqlite') {
+    //             await db.schema.createIndex(indexDef.name)
+    //                 .on(this.tableName)
+    //                 .columns(indexDef.columns)
+    //                 .execute();
+    //         }
+    //     }
 
-        // post-create event
-        await this._event.emit('created', { table: this, db: db });
+    //     // post-create event
+    //     await this._event.emit('created', { table: this, db: db });
 
-        // inner function
-        const chainOptionFns = (fns = []) => (col) => fns.reduce((acc, fn) => fn(acc), col);
+    //     // inner function
+    //     const chainOptionFns = (fns = []) => (col) => fns.reduce((acc, fn) => fn(acc), col);
         
-        function normalizeOptions(options) {
-            // if (!options) return undefined;
-            // if (typeof options === 'function') return options;
-            // if (Array.isArray(options)) return chainOptionFns(options);
-            return buildColumnOptionsFromDecl(options);
-        };
+    //     function normalizeOptions(options) {
+    //         // if (!options) return undefined;
+    //         // if (typeof options === 'function') return options;
+    //         // if (Array.isArray(options)) return chainOptionFns(options);
+    //         return buildColumnOptionsFromDecl(options);
+    //     };
 
-        function buildColumnOptionsFromDecl(def = {}) {
-            return (col) => {
-                if (def.pk) col = col.primaryKey();
-                if (def.autoIncrement) col = col.autoIncrement();
-                if (def.notNull) col = col.notNull();
-                if (def.unique) col = col.unique();
-                // if (def.unsigned && typeof col.unsigned === 'function') col = col.unsigned();
-                // if (def.defaultTo !== undefined) col = col.defaultTo(def.defaultTo);
-                // if (def.references) {
-                //     const r = def.references;
-                //     col = col.references(`${r.table}.${r.column}`);
-                //     if (r.onDelete) col = col.onDelete(r.onDelete);
-                //     if (r.onUpdate) col = col.onUpdate(r.onUpdate);
-                // }
-                // if (def.check) col = col.check(def.check);
-                return col;
-            };
-        }
-    }
+    //     function buildColumnOptionsFromDecl(def = {}) {
+    //         return (col) => {
+    //             if (def.pk) col = col.primaryKey();
+    //             if (def.autoIncrement) col = col.autoIncrement();
+    //             if (def.notNull) col = col.notNull();
+    //             if (def.unique) col = col.unique();
+    //             // if (def.unsigned && typeof col.unsigned === 'function') col = col.unsigned();
+    //             // if (def.defaultTo !== undefined) col = col.defaultTo(def.defaultTo);
+    //             // if (def.references) {
+    //             //     const r = def.references;
+    //             //     col = col.references(`${r.table}.${r.column}`);
+    //             //     if (r.onDelete) col = col.onDelete(r.onDelete);
+    //             //     if (r.onUpdate) col = col.onUpdate(r.onUpdate);
+    //             // }
+    //             // if (def.check) col = col.check(def.check);
+    //             return col;
+    //         };
+    //     }
+    // }
 
     // ############################################
     /* ============================================================
@@ -333,7 +333,7 @@ class SQLTable extends MetaTable {
         }
         
         // 디버깅
-        const node = tb.toOperationNode();
+        // const node = tb.toOperationNode();
         // const compiled = db.compiler.compileNode(node);
         // console.log(compiled.sql);
         // console.log(compiled.parameters);
@@ -580,7 +580,7 @@ class SQLTable extends MetaTable {
         await this._event.emit('dropped', { table: this, db: db });
     }
 
-    // TODO: select 수정필요, 전달 where 조건 등
+    // TODO: select 수정필요, 전달 where 조건 등, page, size 객체로 또는 숫자
     async select(page = 1, size = 10, where = {}) {
         // page: 1부터 시작, size: 페이지당 row 수
         const limit = size > 0 ? size : 10;
@@ -619,19 +619,28 @@ class SQLTable extends MetaTable {
         return rows;
     }
 
-    async insert(p_row) {
+    async insert(p_row, options = { execute: true }) {
+        let result = null;
         // const tableName = this._name;
-        
-        
-        // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
-        if (p_row instanceof MetaRow || _isObject(p_row)) {
-            // this.rows.add(p_row);
-            // TODO: p_row 에 대한 검사 필요
-            const pk = 'id'
-            const { [pk]: id, ...changes } = p_row
-            return await this.db.insertInto(this.tableName).values({ ...changes }).execute();
-        } else {
-            throw new Error('Invalid row type');
+        try {
+            // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
+            if (p_row instanceof MetaRow || _isObject(p_row)) {
+                // this.rows.add(p_row);
+                // TODO: p_row 에 대한 검사 필요
+                const pk = 'id'
+                const { [pk]: id, ...changes } = p_row
+                let query = this.db.insertInto(this.tableName).values({ ...changes });
+                
+                result = query.compile();
+                if (options.execute) await query.execute();
+
+                return result;
+            } else {
+                throw new Error('Invalid row type');
+            }
+
+        } catch (err) {
+            throw new Error('Invalid row type' + err.message + ', sql:'+ result?.sql);
         }
     }
 

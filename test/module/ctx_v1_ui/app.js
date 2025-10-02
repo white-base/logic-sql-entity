@@ -6,7 +6,7 @@ import expressLayouts from 'express-ejs-layouts';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
 import routes, { viewPaths } from './routes/index.js';
-import { ctx_v1 } from '../ctx_v1/index.js';
+import { ctx_v1 as ctx } from '../ctx_v1/index.js';
 import { SqliteDialect } from 'kysely'
 import Database from 'better-sqlite3'
 import { sql } from 'kysely'
@@ -24,23 +24,26 @@ const connect = {
       }
   }
 }
-ctx_v1.connect = connect;
+ctx.connect = connect;
 
 // 동적 컬럼 추가
-// await ctx_v1.addColumn('sto_master', 'add_temp', { dataType: 'varchar(50)' });
+await ctx.addColumn('sto_master', 'add_temp', { dataType: 'varchar(50)' });
+await ctx.addColumn('sto_account', 'add_temp', { dataType: 'varchar(50)' });
 
-await ctx_v1.init();  
+await ctx.init();
 
 // 순서 중요 : 단 sqlite 는 무관함
-await sql`DROP TABLE IF EXISTS meb_account`.execute(ctx_v1.db);
-await sql`DROP TABLE IF EXISTS sto_account`.execute(ctx_v1.db);
-await sql`DROP TABLE IF EXISTS meb_master`.execute(ctx_v1.db);
-await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx_v1.db);
+await sql`DROP TABLE IF EXISTS meb_account`.execute(ctx.db);
+await sql`DROP TABLE IF EXISTS sto_account`.execute(ctx.db);
+await sql`DROP TABLE IF EXISTS meb_master`.execute(ctx.db);
+await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx.db);
 
-await ctx_v1.createSchema();
+await ctx.createSchema();
 
 // 테스트용 데이터 삽입
 // await ctx_v1.tables[0].insert({sto_id: 'S001', sto_name: 'Store 1', status_cd: '01'});
+await ctx.getTable('sto_master').insert({sto_id: 'S001', sto_name: 'Default Store', status_cd: '01'});
+await ctx.getTable('sto_account').insert({sto_id: 'S001', admin_id: 'admin', admin_pw: '1234', admin_name: 'Administrator', use_yn: 'Y' });
 
 // app.use(expressLayouts);
 // 뷰 엔진 설정 (EJS 예시)

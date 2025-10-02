@@ -1,43 +1,43 @@
-
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <title><%= baseTitle || 'Manager' %></title>
-  <link rel="stylesheet" href="/css/app.css">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/css/layout.css" />
-  <style>
-    
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-  <div class="layout-header">
-    <a href="/"><%= baseTitle || 'Manager' %></a>
-  </div>
-  <div class="layout-container">
-    <nav class="sidebar">
-      <ul class="menu-lv1">
-        <% menuMap.forEach(function(lv1) { %>
-          <li>
-            <div class="menu-lv1-title"><%= lv1.title %></div>
-            <% if (lv1.items && lv1.items.length) { %>
-              <ul class="menu-lv2">
+  <!-- 헤더 -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-dark mb-3">
+    <div class="container-fluid">
+      <a class="navbar-brand text-white fw-bold" href="/"><%= baseTitle || 'Manager' %></a>
+    </div>
+  </nav>
+  <div class="container-fluid">
+    <div class="row">
+      <!-- 사이드바 -->
+      <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar py-3">
+        <div class="list-group">
+          <% menuMap.forEach(function(lv1) { %>
+            <div class="mb-2">
+              <div class="fw-semibold px-2 py-1 text-primary"><%= lv1.title %></div>
+              <% if (lv1.items && lv1.items.length) { %>
                 <% lv1.items.forEach(function(lv2) { %>
-                  <li>
-                    <span class="menu-lv2-icon">+</span>
-                    <a href="<%= lv1.basePath %><%= lv2.url %>"><%= lv2.title %></a>
-                  </li>
+                  <a href="<%= lv1.basePath %><%= lv2.url %>" class="list-group-item list-group-item-action">
+                    <span class="me-2 text-secondary">+</span>
+                    <%= lv2.title %>
+                  </a>
                 <% }); %>
-              </ul>
-            <% } %>
-          </li>
-        <% }); %>
-      </ul>
-    </nav>
-    <main class="main-content">
-      <%- body %>
-    </main>
+              <% } %>
+            </div>
+          <% }); %>
+        </div>
+      </nav>
+      <!-- 메인 컨텐츠 -->
+      <main class="col-md-9 col-lg-10 ms-sm-auto px-4">
+        <%- body %>
+      </main>
+    </div>
   </div>
 </body>
 </html>

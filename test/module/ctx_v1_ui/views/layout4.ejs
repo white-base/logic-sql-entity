@@ -1,0 +1,43 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title><%= baseTitle || 'Manager' %></title>
+  <link rel="stylesheet" href="/css/app.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <style>
+    
+  </style>
+</head>
+<body>
+  <div class="layout-header">
+    <a href="/"><%= baseTitle || 'Manager' %></a>
+  </div>
+  <div class="layout-container">
+    <nav class="sidebar">
+      <ul class="menu-lv1">
+        <% menuMap.forEach(function(lv1) { %>
+          <li>
+            <div class="menu-lv1-title"><%= lv1.title %></div>
+            <% if (lv1.items && lv1.items.length) { %>
+              <ul class="menu-lv2">
+                <% lv1.items.forEach(function(lv2) { %>
+                  <li>
+                    <span class="menu-lv2-icon">+</span>
+                    <a href="<%= lv1.basePath %><%= lv2.url %>"><%= lv2.title %></a>
+                  </li>
+                <% }); %>
+              </ul>
+            <% } %>
+          </li>
+        <% }); %>
+      </ul>
+    </nav>
+    <main class="main-content">
+      <%- body %>
+    </main>
+  </div>
+</body>
+</html>

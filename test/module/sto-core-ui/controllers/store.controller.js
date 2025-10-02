@@ -35,7 +35,7 @@ export const detail = async (req, res, option) => {
     const sto_id = req.params.id;
 
     table.clear();
-    await table.select(1, 1, { sto_id: sto_id });
+    await table.select(1, 1, { sto_id });
 
     res.render('store/detail', {
         title: 'Store View',
@@ -59,13 +59,15 @@ export const del = async (req, res, option) => {
     const sto_id = req.params.id;
     const basePath = req.baseUrl || '';
 
-    await table.delete({ sto_id: sto_id });
+    await table.delete({ sto_id });
     res.redirect(basePath + '/');
 };
 
 export const update = async (req, res, option) => {
     const basePath = req.baseUrl || '';
+    const sto_id = req.params.id;
 
+    req.body.sto_id = sto_id; // Ensure the ID is set for the update operation
     await table.update(req.body);
     res.redirect(basePath + '/');
 };

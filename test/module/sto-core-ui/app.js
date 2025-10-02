@@ -37,7 +37,7 @@ await sql`DROP TABLE IF EXISTS meb_master`.execute(ctx.db);
 await sql`DROP TABLE IF EXISTS sto_master`.execute(ctx.db);
 await ctx.createSchema();
 // 테스트용 데이터 삽입
-await ctx.tables[0].insert({sto_id: 'S001', sto_name: 'Default Store', status_cd: '01'});
+await ctx.getTable('sto_master').insert({sto_id: 'S001', sto_name: 'Default Store', status_cd: '01'});
 
 const app = express();
 
