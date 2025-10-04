@@ -6,9 +6,7 @@ import { stoAccountRoutes, menu } from './sto-account.js'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const router = express.Router();
-const menuMap = [];
-
-menuMap.push(menu);
+const menuMap = [menu];
 
 router.use((req, res, next) => {
   if (typeof res.locals.baseTitle === 'undefined') {

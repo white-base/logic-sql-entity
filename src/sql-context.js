@@ -407,13 +407,15 @@ class SQLContext extends MetaElement {
         // Uses existing transaction if provided; otherwise starts one.
         const db = dbOrConn || this.db;
 
-        if (db && db.constructor && db.constructor.name === 'Kysely') {
-            await db.transaction().execute(async (trx) => {
-                await this._dropSchemaRecursive(trx);
-            });
-        } else {
-            await this._dropSchemaRecursive(db);
-        }
+        // 트렌적션 미 처리
+        // if (db && db.constructor && db.constructor.name === 'Kysely') {
+        //     await db.transaction().execute(async (trx) => {
+        //         await this._dropSchemaRecursive(trx);
+        //     });
+        // } else {
+        //     await this._dropSchemaRecursive(db);
+        // }
+        await this._dropSchemaRecursive(db);
     }
 
     async _dropSchemaRecursive(trx) {

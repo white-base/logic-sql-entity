@@ -14,7 +14,6 @@ export const list = async (req, res, option) => {
         title: 'Store List',
         message: 'Store List Page',
         output: table,
-        layout: option?.layout || 'layout',
         basePath: basePath
     });
 };
@@ -25,7 +24,6 @@ export const form = (req, res, option) => {
         title: 'Store Add',
         message: 'Add a new store',
         output: table,
-        layout: option?.layout || 'layout',
         basePath: req.baseUrl
     });
 };
@@ -42,7 +40,6 @@ export const detail = async (req, res, option) => {
         message: 'View store details',
         output: table,
         row: table.rows[0],
-        layout: option?.layout || 'layout',
         basePath: req.baseUrl
     });
 };
@@ -52,7 +49,7 @@ export const add = async (req, res, option) => {
     const basePath = req.baseUrl || '';
 
     await table.insert(req.body);
-    res.redirect(basePath + '/');
+    res.redirect(basePath + '/list');
 };
 
 export const del = async (req, res, option) => {
@@ -60,7 +57,7 @@ export const del = async (req, res, option) => {
     const basePath = req.baseUrl || '';
 
     await table.delete({ sto_id });
-    res.redirect(basePath + '/');
+    res.redirect(basePath + '/list');
 };
 
 export const update = async (req, res, option) => {
@@ -69,5 +66,5 @@ export const update = async (req, res, option) => {
 
     req.body.sto_id = sto_id; // Ensure the ID is set for the update operation
     await table.update(req.body);
-    res.redirect(basePath + '/');
+    res.redirect(basePath + '/list');
 };

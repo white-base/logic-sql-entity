@@ -15,7 +15,6 @@ export const list = async (req, res, option) => {
         title: 'Account List',
         message: 'Account List Page',
         output: table,
-        layout: option?.layout || 'layout',
         basePath: basePath
     });
 };
@@ -31,7 +30,6 @@ export const form = async (req, res, option) => {
         message: 'Add a new account',
         store: store,
         output: table,
-        layout: option?.layout || 'layout',
         basePath: req.baseUrl
     });
 };
@@ -48,7 +46,6 @@ export const detail = async (req, res, option) => {
         message: 'View account details',
         output: table,
         row: table.rows[0],
-        layout: option?.layout || 'layout',
         basePath: req.baseUrl
     });
 };
@@ -58,7 +55,7 @@ export const add = async (req, res, option) => {
 
     if (typeof req.body.use_yn === 'undefined') req.body.use_yn = '';
     await table.insert(req.body);
-    res.redirect(basePath + '/');
+    res.redirect(basePath + '/list');
 };
 
 export const del = async (req, res, option) => {
@@ -66,7 +63,7 @@ export const del = async (req, res, option) => {
     const acc_idx = req.params.id;
 
     await table.delete({ acc_idx: acc_idx });
-    res.redirect(basePath + '/');
+    res.redirect(basePath + '/list');
 };
 
 export const update = async (req, res, option) => {
@@ -74,6 +71,8 @@ export const update = async (req, res, option) => {
     const acc_idx = req.params.id;
 
     req.body.acc_idx = acc_idx; // Ensure the primary key is set for the update
+    req.body.use_yn = req.body.use_yn || 'N';
+
     await table.update(req.body);
-    res.redirect(basePath + '/');
+    res.redirect(basePath + '/list');
 };

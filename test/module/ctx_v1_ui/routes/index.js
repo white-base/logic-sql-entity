@@ -20,12 +20,12 @@ router.use((req, res, next) => {
     res.locals.baseTitle = 'Manager'; // TODO: 검토 필요
   }
   res.locals.menuMap = menuMap;
-  res.locals.layout = layout;  // 공통 layout 설정
+  // res.locals.layout = layout;  // 공통 layout 설정
   next();
 });
 
 router.get('/', (req, res) => {
-    res.render('home', { layout: res.locals.layout });
+    res.render('home');
 });
 
 // POINT: 라우터 등록

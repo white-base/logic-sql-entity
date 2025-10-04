@@ -19,33 +19,38 @@ ctx_sto_account.tables['sto_account'].columns.add('sto_id', {
     nullable: false,
     isDynamic: false,
     dataType: 'varchar(10)',
-    kind: ['C']
+    kind: ['C'],
+    placeholder: 'Enter Store ID'
 });
 ctx_sto_account.tables['sto_account'].columns.add('admin_id', {
     unique: true,
     nullable: false,
     isDynamic: false,
     dataType: 'varchar(50)',
-    kind: ['C']
+    kind: ['C'],
+    placeholder: 'Enter Admin ID'
 });
 ctx_sto_account.tables['sto_account'].columns.add('admin_pw', {
     nullable: false,
     isDynamic: false,
     dataType: 'varchar(50)',
-    kind: ['C', 'U']
+    kind: ['C', 'U'],
+    placeholder: 'Enter Admin Password'
 });
 ctx_sto_account.tables['sto_account'].columns.add('admin_name', {
     nullable: false,
     isDynamic: false,
     dataType: 'varchar(100)',
-    kind: ['C', 'U']
+    kind: ['C', 'U'],
+    placeholder: 'Enter Admin Name'
 });
 ctx_sto_account.tables['sto_account'].columns.add('use_yn', {
     nullable: false,
     dataType: 'char(1)',
     isDynamic: false,
     defaultValue: 'Y',
-    kind: ['C', 'U']
+    kind: ['C', 'U'],
+    placeholder: 'Use Y/N'
 });
 ctx_sto_account.tables['sto_account'].columns.add('create_dt', {
     nullable: false,
