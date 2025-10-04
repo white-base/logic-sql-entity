@@ -1,5 +1,5 @@
 import { ctx_sto_core as ctx } from '../../sto-core/index.js';
-import { sql } from 'kysely'
+// import { sql } from 'kysely'
 import connect from './connect.js';
 
 async function initDatabase() {
