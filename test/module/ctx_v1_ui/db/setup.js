@@ -1,5 +1,5 @@
 import { ctx_v1 as ctx } from '../../ctx_v1/index.js';
-import { sql } from 'kysely'
+// import { sql } from 'kysely'
 import connect from './connect.js';
 
 async function initDatabase() {
