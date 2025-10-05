@@ -1,7 +1,7 @@
-import { ctx_sto_account } from '../../sto-addon-account/index.js'; // REVIEW: -> '@logicfeel/sto-core'
+import { ctxStoAccount } from '../../sto-addon-account/index.js'; // REVIEW: -> '@logicfeel/sto-core'
 
-const table = ctx_sto_account.tables['sto_account'];
-const store = ctx_sto_account.getTable('sto_master');
+const table = ctxStoAccount.getTable('sto_account');
+const store = ctxStoAccount.getTable('sto_master');
 
 export const list = async (req, res, option) => {
     const page = req.body?.page || 1;

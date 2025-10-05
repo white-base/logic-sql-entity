@@ -1,12 +1,8 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import express from 'express';
-import { stoAccountRoutes, menu } from './sto-account.js'
+import { stoAccountRoutes, stoAccountMenu, stoAccountViews } from './sto-account.js'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const router = express.Router();
-const menuMap = [menu];
+const menuMap = [stoAccountMenu];
 
 router.use((req, res, next) => {
   if (typeof res.locals.baseTitle === 'undefined') {
@@ -19,3 +15,4 @@ router.use((req, res, next) => {
 router.use('/', stoAccountRoutes);
 
 export default router;
+export { menuMap, stoAccountViews as viewPaths };

@@ -1,6 +1,6 @@
-import { ctx_sto_core } from '../../sto-core/index.js'; // REVIEW: -> '@logicfeel/sto-core'
+import { ctxStore } from '../../sto-core/index.js'; // REVIEW: -> '@logicfeel/sto-core'
 
-const table = ctx_sto_core.tables['sto_master'];
+const table = ctxStore.getTable('sto_master');
 
 export const list = async (req, res, option) => {
     const page = req.body?.page || 1;

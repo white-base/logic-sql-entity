@@ -24,6 +24,8 @@ router.post('/add', add);
 router.post('/del/:id', del);
 router.post('/update/:id', update);
 
-const stoRoutes = router;
+const storeRoutes = router;
+const storeMenu = menu;
+const storeViews = viewPath;
 
-export { stoRoutes, menu, viewPath };
+export { storeRoutes, storeMenu, storeViews };

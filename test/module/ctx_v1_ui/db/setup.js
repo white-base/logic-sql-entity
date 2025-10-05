@@ -1,8 +1,7 @@
 import { ctx_v1 as ctx } from '../../ctx_v1/index.js';
-// import { sql } from 'kysely'
 import connect from './connect.js';
 
-async function initDatabase() {
+export default async function initDatabase() {
 
     ctx.connect = connect;
 
@@ -21,5 +20,3 @@ async function initDatabase() {
 
     console.log('Database setup completed.');
 }
-
-export default initDatabase;

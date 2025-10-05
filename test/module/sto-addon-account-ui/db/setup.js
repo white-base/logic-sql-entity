@@ -1,8 +1,7 @@
-import { ctx_sto_account as ctx } from '../../sto-addon-account/index.js';
-// import { sql } from 'kysely'
+import { ctxStoAccount as ctx } from '../../sto-addon-account/index.js';
 import connect from './connect.js';
 
-async function initDatabase() {
+export default async function initDatabase() {
 
     ctx.connect = connect;
 
@@ -21,5 +20,3 @@ async function initDatabase() {
 
     console.log('Database setup completed.');
 }
-
-export default initDatabase;

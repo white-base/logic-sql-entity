@@ -25,5 +25,7 @@ router.post('/del/:id', del);
 router.post('/update/:id', update);
 
 const stoAccountRoutes = router;
+const stoAccountMenu = menu;
+const stoAccountViews = viewPath;
 
-export { stoAccountRoutes, menu, viewPath };
+export { stoAccountRoutes, stoAccountMenu, stoAccountViews };

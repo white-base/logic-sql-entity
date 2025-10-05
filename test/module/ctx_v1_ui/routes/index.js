@@ -1,16 +1,14 @@
 import express from 'express';
-// import * as ctrl from '../../sto-core-ui/controllers/index.js';
-import { menu as stoMenu, stoRoutes, viewPath as stoViewPath } from '../../sto-core-ui/routes/store.js'; // REVIEW: -> '@logicfeel/sto-core-ui/routes'
-import { menu as stoAccountMenu, stoAccountRoutes, viewPath as accoutViewPath } from '../../sto-addon-account-ui/routes/sto-account.js'; // REVIEW: -> '@logicfeel/sto-core-ui/routes'
-
+import { storeRoutes, storeMenu, storeViews } from '../../sto-core-ui/routes/store.js'; // REVIEW: -> '@logicfeel/sto-core-ui/routes'
+import { stoAccountRoutes, stoAccountMenu, stoAccountViews } from '../../sto-addon-account-ui/routes/sto-account.js'; // REVIEW: -> '@logicfeel/sto-core-ui/routes'
 
 const router = express.Router();
 const menuMap = [];
 const layout = 'layout';
-const viewPaths = [stoViewPath, accoutViewPath];  // POINT: view path 정의
+const viewPaths = [storeViews, stoAccountViews];  // POINT: view path 정의
 
-stoMenu.basePath = '/sto-core';
-menuMap.push(stoMenu);
+storeMenu.basePath = '/sto-core';
+menuMap.push(storeMenu);
 
 stoAccountMenu.basePath = '/sto-account';
 menuMap.push(stoAccountMenu);
@@ -29,8 +27,8 @@ router.get('/', (req, res) => {
 });
 
 // POINT: 라우터 등록
-router.use(stoMenu.basePath, stoRoutes);
+router.use(storeMenu.basePath, storeRoutes);
 router.use(stoAccountMenu.basePath, stoAccountRoutes);
 
 export default router;
-export { viewPaths }; 
+export { viewPaths, menuMap }; 

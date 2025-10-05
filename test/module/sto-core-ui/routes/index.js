@@ -1,8 +1,8 @@
 import express from 'express';
-import { stoRoutes, menu } from './store.js'
+import { storeRoutes, storeMenu, storeViews } from './store.js'
 
 const router = express.Router();
-const menuMap = [menu];
+const menuMap = [storeMenu];
 
 router.use((req, res, next) => {
   if (typeof res.locals.baseTitle === 'undefined') {
@@ -12,6 +12,7 @@ router.use((req, res, next) => {
   next();
 });
 
-router.use('/', stoRoutes);
+router.use('/', storeRoutes);
 
 export default router;
+export { menuMap, storeViews as viewPaths };
