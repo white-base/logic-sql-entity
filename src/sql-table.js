@@ -647,37 +647,50 @@ class SQLTable extends MetaTable {
     // POINT: 여기서 할것
     async update(p_row) {
         const change = {};
-        let query = await this.db.updateTable(this.tableName);
+        let pkCount = 0; // PK 조건 개수 카운트
 
-        if (p_row instanceof MetaRow) {
-            for (let i = 0; i < p_row.count; i++) {
-                const key = p_row[i].columnName;
-                const col = this.columns[key];
-                if(col.primaryKey === true) continue; // PK만 조건
-                if(col.virtual === true) continue;  // 가상 컬럼 스킵
-                change[key] = p_row[key];
+        try {
+            let query = await this.db.updateTable(this.tableName);
+
+            if (p_row instanceof MetaRow) {
+                for (let i = 0; i < p_row.count; i++) {
+                    const key = p_row[i].columnName;
+                    const col = this.columns[key];
+                    if(col.primaryKey === true) continue; // PK만 조건
+                    if(col.virtual === true) continue;  // 가상 컬럼 스킵
+                    change[key] = p_row[key];
+                }
+            } else if (_isObject(p_row)) {
+                for (const key in p_row) {
+                    if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
+                    const col = this.columns[key];
+                    if (!col) continue;
+                    if (col.primaryKey === true) continue; // PK만 조건
+                    if (col.virtual === true) continue;  // 가상 컬럼 스킵
+                    change[key] = p_row[key];
+                }            
+            } else {
+                throw new Error('Invalid row type');
             }
-        } else if (_isObject(p_row)) {
-            for (const key in p_row) {
-                if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
-                const col = this.columns[key];
-                if (!col) continue;
-                if (col.primaryKey === true) continue; // PK만 조건
-                if (col.virtual === true) continue;  // 가상 컬럼 스킵
-                change[key] = p_row[key];
-            }            
-        } else {
-            throw new Error('Invalid row type');
-        }
-        query = await query.set(change);
+            query = query.set(change);
 
-        this.columns.forEach((col, key) => {
-            if(col.primaryKey !== true) return; // PK만 조건
-            if(col.virtual == true) return;  // 가상 컬럼 스킵
-            query = query.where(col.columnName, '=', p_row[col.columnName]);
-        });
-        const result = await query.executeTakeFirst();
-        return result;
+            this.columns.forEach((col, key) => {
+                if(col.primaryKey === false) return; // PK만 조건
+                if(col.virtual == true) return;  // 가상 컬럼 스킵
+                query = query.where(col.columnName, '=', p_row[col.columnName]);
+                pkCount++;
+            });
+            // PK 조건이 없으면 예외 발생
+            if (pkCount === 0) {
+                throw new Error('update: PK 조건이 없어 전체 테이블이 수정될 수 있습니다.');
+            }
+
+            const result = await query.executeTakeFirst();
+            return result;
+
+        } catch (err) {
+            throw new Error('Invalid row type' + err.message);
+        }
 
         // if (p_row instanceof MetaRow || _isObject(p_row)) {
         //     // const row = p_row instanceof MetaRow ? p_row.entries() : Object.entries(p_row);
@@ -728,19 +741,32 @@ class SQLTable extends MetaTable {
     }
 
     async delete(p_row) {
-        if (p_row instanceof MetaRow || _isObject(p_row)) {
-            let query = await this.db.deleteFrom(this.tableName);
-            
-            this.columns.forEach((col, key) => {
-                if(col.primaryKey !== true) return; // PK만 조건
-                if(col.virtual === true) return;  // 가상 컬럼 스킵
-                query = query.where(col.columnName, '=', p_row[col.columnName]);
-            });
-            await query.executeTakeFirst();
-            // return { affectedRows: res.numDeletedRows ?? 0 }
+        let pkCount = 0; // PK 조건 개수 카운트
 
-        } else {
-            throw new Error('Invalid row type');
+        try {
+            if (p_row instanceof MetaRow || _isObject(p_row)) {
+                let query = await this.db.deleteFrom(this.tableName);
+                
+                this.columns.forEach((col, key) => {
+                    if(col.primaryKey !== true) return; // PK만 조건
+                    if(col.virtual === true) return;  // 가상 컬럼 스킵
+                    query = query.where(col.columnName, '=', p_row[col.columnName]);
+                    pkCount++;
+                });
+
+                // PK 조건이 없으면 예외 발생
+                if (pkCount === 0) {
+                    throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
+                }
+
+                await query.executeTakeFirst();
+                // return { affectedRows: res.numDeletedRows ?? 0 }
+
+            } else {
+                throw new Error('Invalid row type');
+            }
+        } catch (err) {
+            throw new Error('Invalid row type' + err.message);
         }
     }
 
@@ -751,15 +777,19 @@ class SQLTable extends MetaTable {
         const trans = this.rows._transQueue.select();
         const tableName = this._name;
 
-        for (const row of trans) {
-            const pk = 'id';
-            const { [pk]: id, ...changes } = row.ref;
-            if (row.cmd === 'I') {
-                await this.db.insertInto(tableName).values({ ...changes }).execute();
-            } else if (row.cmd === 'U') {
-                await this.db.updateTable(tableName).set({ ...changes }).where('id', '=', id).execute();
-            } else if (row.cmd === 'D') {
-                await this.db.deleteFrom(tableName).where('id', '=', id).execute();
+        for (const item of trans) {
+            // const pk = 'id';
+            // const { [pk]: id, ...changes } = row.ref;
+            const row = item.ref;
+            if (item.cmd === 'I') {
+                await this.insert(row);
+                // await this.db.insertInto(tableName).values({ ...changes }).execute();
+            } else if (item.cmd === 'U') {
+                await this.update(row);
+                // await this.db.updateTable(tableName).set({ ...changes }).where('id', '=', id).execute();
+            } else if (item.cmd === 'D') {
+                await this.delete(row);
+                // await this.db.deleteFrom(tableName).where('id', '=', id).execute(); // TODO: 복합 PK 지원
             }
         }
         this.rows.commit();

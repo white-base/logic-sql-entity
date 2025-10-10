@@ -102,15 +102,17 @@ describe('Kysely + Jest (ESM JS)', () => {
         const table = new SQLTable('person');
         const conn = {
             dialect: new SqliteDialect({
-                database: new Database(':memory:')
+                // database: new Database(':memory:')
+                database: new Database('sql-table-test.sqlite')
             })
         };
         table.connect = conn;
 
-        table.columns.add('id');
+        table.columns.add('id', {primaryKey: true});
         table.columns.add('name');
         table.columns.add('age');
 
+        await table.db.schema.dropTable('person').ifExists().execute();
         // 스키마 생성
         // 테이블 존재 여부 검사 후 생성
         await table.db.schema
@@ -126,10 +128,10 @@ describe('Kysely + Jest (ESM JS)', () => {
         //     // connection: 'Server=.;Database=app;User Id=sa;Password=***;'
         // };
 
-        table.insert({ name: '홍길동', age: 30 });
-        table.insert({ name: '김로직', age: 40 });
-        table.update({ id: 1, name: '홍길동2', age: 32 });
-        table.delete({ id: 2 });
+        await table.insert({ name: '홍길동', age: 30 });
+        await table.insert({ name: '김로직', age: 40 });
+        await table.update({ id: 1, name: '홍길동2', age: 32 });
+        await table.delete({ id: 2 });
 
         table.rows.add({ name: '이순신', age: 50 });
         table.rows[0].name = '이순신2';

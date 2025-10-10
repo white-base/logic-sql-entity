@@ -13,11 +13,27 @@ menuMap.push(storeMenu);
 stoAccountMenu.basePath = '/sto-account';
 menuMap.push(stoAccountMenu);
 
+// 메뉴 타이틀별 그룹핑
+function groupMenusByTitle(menus) {
+    const map = {};
+    menus.forEach(menu => {
+        if (!map[menu.title]) {
+            map[menu.title] = {
+                title: menu.title,
+                basePath: menu.basePath,
+                items: []
+            };
+        }
+        map[menu.title].items = map[menu.title].items.concat(menu.items);
+    });
+    return Object.values(map);
+}
+
 router.use((req, res, next) => {
   if (typeof res.locals.baseTitle === 'undefined') {
     res.locals.baseTitle = 'Manager'; // TODO: 검토 필요
   }
-  res.locals.menuMap = menuMap;
+  res.locals.menuMap = groupMenusByTitle(menuMap);
   // res.locals.layout = layout;  // 공통 layout 설정
   next();
 });
