@@ -20,11 +20,16 @@ function groupMenusByTitle(menus) {
         if (!map[menu.title]) {
             map[menu.title] = {
                 title: menu.title,
-                basePath: menu.basePath,
+                basePath: '', // basePath를 ''로 변경
                 items: []
             };
         }
-        map[menu.title].items = map[menu.title].items.concat(menu.items);
+        map[menu.title].items = map[menu.title].items.concat(
+            menu.items.map(item => ({
+                ...item,
+                url: `${menu.basePath}${item.url}`
+            }))
+        );
     });
     return Object.values(map);
 }

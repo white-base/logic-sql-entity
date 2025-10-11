@@ -621,7 +621,42 @@ class SQLTable extends MetaTable {
 
     async insert(p_row, options = { execute: true }) {
         let result = null;
-        // const tableName = this._name;
+        const data = {};
+        
+        if (this.profile.features?.returning === true) {
+            let query = await this.db.insertInto(this.tableName);
+
+            if (p_row instanceof MetaRow) {
+                for (let i = 0; i < p_row.count; i++) {
+                    const key = p_row[i].columnName;
+                    if (this.columns.existColumnName(key)) {
+                        data[key] = p_row[key];
+                    }
+                }
+
+            } else if (_isObject(p_row)) {
+                for (const key in p_row) {
+                    if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
+                    if (this.columns.existColumnName(key)) {
+                        data[key] = p_row[key];
+                    }
+                }
+
+            } else {
+                throw new Error('Invalid row type');
+            }
+
+            let query = this.db.insertInto(this.tableName)
+                .values({ ...data })
+                .returningAll();
+
+            query.executeTakeFirstOrThrow();
+
+            
+
+        }
+
+
         try {
             // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
             if (p_row instanceof MetaRow || _isObject(p_row)) {
