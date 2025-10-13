@@ -39,6 +39,7 @@ class SQLTable extends MetaTable {
 
         this._event       = new EventEmitter();
         
+        
         // /**
         //  * 엔티티의 데이터(로우) 컬렉션
         //  * 
@@ -646,7 +647,8 @@ class SQLTable extends MetaTable {
                 throw new Error('Invalid row type');
             }
 
-            let query = this.db.insertInto(this.tableName)
+
+            query = this.db.insertInto(this.tableName)
                 .values({ ...data })
                 .returningAll();
 
