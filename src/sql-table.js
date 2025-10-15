@@ -115,6 +115,87 @@ class SQLTable extends MetaTable {
         return this._event.on('dropped', handler);
     }
 
+    async $create(trx) {
+        const builders = [];
+
+        builders.push(await this._createStage1(trx));    
+        builders.push(...await this._createStage2_FKs(trx));
+        builders.push(...await this._createStage3_Indexes(trx));
+        // builders.push(await this._createStage1(trx, { execute: false }));
+        // builders.push(await this._createStage2_FKs(trx, { execute: false }));
+        // builders.push(await this._createStage3_Indexes(trx, { execute: false }));
+        // await this._createStage1(trx);
+        // await this._createStage2_FKs(trx);
+        // await this._createStage3_Indexes(trx);
+        return builders;
+    }
+
+    async $drop(trx) {
+        const db = trx || this.db;
+        const builder = db.schema.dropTable(this.tableName).ifExists();
+        // 실행은 drop에서, 여기서는 builder만 리턴
+        return builder;
+    }
+
+    async $insert(p_data, trx) {
+        let result = null;
+        const data = {};
+        let query = null;
+
+        if (p_data instanceof MetaRow) {
+            for (let i = 0; i < p_data.count; i++) {
+                const key = p_data[i].columnName;
+                if (this.columns.existColumnName(key)) {
+                    data[key] = p_data[key];
+                }
+            }
+
+        } else if (_isObject(p_data)) {
+            for (const key in p_data) {
+                if (!Object.prototype.hasOwnProperty.call(p_data, key)) continue;
+                if (this.columns.existColumnName(key)) {
+                    data[key] = p_data[key];
+                }
+            }
+
+        } else {
+            throw new Error('Invalid row type');
+        }
+        if (this.profile.features?.returning === true) {
+            const inserted = await this.db.insertInto(this.tableName)
+                .values({ ...data })
+                .returningAll()
+                .executeTakeFirst();            
+
+        } else {
+            const result = await db.insertInto(table)
+                .values(values)
+                .executeTakeFirstOrThrow();
+        }
+
+
+        try {
+            // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
+            if (p_row instanceof MetaRow || _isObject(p_row)) {
+                // this.rows.add(p_row);
+                // TODO: p_row 에 대한 검사 필요
+                const pk = 'id'
+                const { [pk]: id, ...changes } = p_row
+                let query = this.db.insertInto(this.tableName).values({ ...changes });
+                
+                result = query.compile();
+                if (options.execute) await query.execute();
+
+                return result;
+            } else {
+                throw new Error('Invalid row type');
+            }
+
+        } catch (err) {
+            throw new Error('Invalid row type' + err.message + ', sql:'+ result?.sql);
+        }
+    }
+
     async init() {
         const info = await detectAndStoreDbInfo(this);
         this.profile.vendor = info.kind;
@@ -128,10 +209,14 @@ class SQLTable extends MetaTable {
         // pre-create event   TODO: 파라메터 정리 필요
         await this._event.emit('creating', { table: this, db: db });
 
-        await this._createStage1(trx);
-        await this._createStage2_FKs(trx);
-        await this._createStage3_Indexes(trx);
+        // await this._createStage1(trx);
+        // await this._createStage2_FKs(trx);
+        // await this._createStage3_Indexes(trx);
 
+        const builders = await this.$create(db);
+        for (const b of builders) {
+            await b.execute();
+        }
         // post-create event
         await this._event.emit('created', { table: this, db: db });
     }
@@ -339,8 +424,9 @@ class SQLTable extends MetaTable {
         // console.log(compiled.sql);
         // console.log(compiled.parameters);
         
-        if (options.execute === true) await tb.execute();
-        return tb.compile();
+        // if (options.execute === true) await tb.execute();
+        // return tb.compile();
+        return tb;
     }
 
     /** Stage2: FK (SQLite는 스킵) */
@@ -356,6 +442,8 @@ class SQLTable extends MetaTable {
         // await this._event.emit('creating', { table: this, db, stage: 2, vendor, info });
 
         const fkGroups = this._collectFkGroups();
+        const builders = [];
+
         for (const [g, def] of fkGroups) {
             let builder = db.schema
                 .alterTable(this.tableName)
@@ -375,11 +463,11 @@ class SQLTable extends MetaTable {
                     return cb;
                 }
                 );
-            
-            sql.push(builder.compile());
-            if (options.execute === true) await builder.execute();            
+            builders.push(builder);
+            // sql.push(builder.compile());
+            // if (options.execute === true) await builder.execute();            
         }
-        return sql;
+        return builders;
     }
 
     /** Stage3: 보조 인덱스 */
@@ -394,14 +482,16 @@ class SQLTable extends MetaTable {
 
         // 컬럼 메타 → 인덱스 그룹 수집(복합/단일 자동 분류)
         const indexDefs = collectIndexGroups(this.tableName, this.columns);          //  [oai_citation:15‡collect-index-group.js](file-service://file-WccUxnsqc1ad5caToyv7ey)
+        const builders = [];
+        
         for (const idx of indexDefs) {
             let builder = db.schema.createIndex(idx.name).on(this.tableName).columns(idx.columns);
             // UNIQUE 인덱스를 인덱스 레벨에서 만들고 싶으면 확장 가능(현재는 컬럼.unique로 제약을 생성)
             
-            if (options.execute === true) await builder.execute();
-            sql.push(builder.compile());
-    }
-    return sql;
+            // if (options.execute === true) await builder.execute();
+            builders.push(builder);
+        }
+        return builders;
 }
 
     // /** 편의 메서드: 3단계 순차 실행 */
@@ -575,7 +665,8 @@ class SQLTable extends MetaTable {
         // pre-drop event
         await this._event.emit('dropping', { table: this, db: db });
 
-        await db.schema.dropTable(this.tableName).ifExists().execute();
+        // await db.schema.dropTable(this.tableName).ifExists().execute();
+        await this.$drop(trx).execute();
 
         // post-drop event
         await this._event.emit('dropped', { table: this, db: db });
@@ -691,11 +782,11 @@ class SQLTable extends MetaTable {
 
             if (p_row instanceof MetaRow) {
                 for (let i = 0; i < p_row.count; i++) {
-                    const key = p_row[i].columnName;
-                    const col = this.columns[key];
+                    // const key = p_row[i].columnName;
+                    const col = this.columns[i];
                     if(col.primaryKey === true) continue; // PK만 조건
                     if(col.virtual === true) continue;  // 가상 컬럼 스킵
-                    change[key] = p_row[key];
+                    change[col.columnName] = p_row[i];
                 }
             } else if (_isObject(p_row)) {
                 for (const key in p_row) {
@@ -837,13 +928,29 @@ class SQLTable extends MetaTable {
         //TODO: DB에서 처리할 지 검토
     }
 
-    async getCreateDDL(trx) {
-        const sql = [];
+    // async getCreateDDL(trx) {
+    //     const sql = [];
 
-        sql.push(await this._createStage1(trx, { execute: false })); // 재확인
-        sql.push(...await this._createStage2_FKs(trx, { execute: false }));
-        sql.push(...await this._createStage3_Indexes(trx, { execute: false }));
-        return sql;
+    //     sql.push(await this._createStage1(trx, { execute: false })); // 재확인
+    //     sql.push(...await this._createStage2_FKs(trx, { execute: false }));
+    //     sql.push(...await this._createStage3_Indexes(trx, { execute: false }));
+    //     return sql;
+    // }
+
+    async getCreateSQL() {
+        const list = [];
+        const builders = await this.$create();
+
+        for (const b of builders) {
+            const sql = b.compile();
+            list.push(sql);
+        }
+        return list;
+    }
+
+    async getDropSQL() {
+        const builder = await this.$drop();
+        return builder.compile();
     }
 }
 
