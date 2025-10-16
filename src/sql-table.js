@@ -115,6 +115,38 @@ class SQLTable extends MetaTable {
         return this._event.on('dropped', handler);
     }
 
+    onInserting(handler) {
+        return this._event.on('inserting', handler);
+    }
+
+    onInserted(handler) {
+        return this._event.on('inserted', handler);
+    }
+
+    onSelecting(handler) {
+        return this._event.on('selecting', handler);
+    }
+
+    onSelected(handler) {
+        return this._event.on('selected', handler);
+    }
+
+    onUpdating(handler) {
+        return this._event.on('updating', handler);
+    }
+
+    onUpdated(handler) {
+        return this._event.on('updated', handler);
+    }
+
+    onDeleting(handler) {
+        return this._event.on('deleting', handler);
+    }
+
+    onDeleted(handler) {
+        return this._event.on('deleted', handler);
+    }
+
     async $create(trx) {
         const builders = [];
 
@@ -138,13 +170,13 @@ class SQLTable extends MetaTable {
     }
 
     async $insert(p_data, trx) {
-        let result = null;
+        const db = trx || this.db;
         const data = {};
         let query = null;
 
         if (p_data instanceof MetaRow) {
             for (let i = 0; i < p_data.count; i++) {
-                const key = p_data[i].columnName;
+                const key = this.columns.indexToKey(i);
                 if (this.columns.existColumnName(key)) {
                     data[key] = p_data[key];
                 }
@@ -161,38 +193,138 @@ class SQLTable extends MetaTable {
         } else {
             throw new Error('Invalid row type');
         }
-        if (this.profile.features?.returning === true) {
-            const inserted = await this.db.insertInto(this.tableName)
+
+        let result;
+        if (this.profile.features?.hasReturning === true) {
+            result = await this.db.insertInto(this.tableName)
                 .values({ ...data })
-                .returningAll()
-                .executeTakeFirst();            
+                .returningAll();
+                // .executeTakeFirst();            
 
         } else {
-            const result = await db.insertInto(table)
-                .values(values)
-                .executeTakeFirstOrThrow();
+            result = await db.insertInto(this.tableName)
+                .values({ ...data });
+                // .executeTakeFirstOrThrow();
         }
 
+        // console.log(result);
+        return result;
+    }
+
+    async $select(selOpt, trx) {
+        const db = trx || this.db;
+        // page: 1부터 시작, size: 페이지당 row 수
+        const limit = selOpt.size > 0 ? selOpt.size : 10;
+        const offset = selOpt.page > 1 ? (selOpt.page - 1) * limit : 0;
+        let rows = [];
+        let query;
+        // if (!db) return rows;
 
         try {
-            // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
-            if (p_row instanceof MetaRow || _isObject(p_row)) {
-                // this.rows.add(p_row);
-                // TODO: p_row 에 대한 검사 필요
-                const pk = 'id'
-                const { [pk]: id, ...changes } = p_row
-                let query = this.db.insertInto(this.tableName).values({ ...changes });
-                
-                result = query.compile();
-                if (options.execute) await query.execute();
+            query = db.selectFrom(this.tableName)
+                .selectAll()
+                .limit(limit)
+                .offset(offset);
 
-                return result;
+            // TODO: select, where, orderby, groupby, having 등 옵션 처리
+            for (const key in selOpt.where) {
+                if (this.columns.existColumnName(key) === false) continue;
+                if (Object.prototype.hasOwnProperty.call(selOpt.where, key)) {
+                    query = query.where(key, '=', selOpt.where[key]);
+                }
+            }
+
+
+            // rows = await query.execute();
+            
+        } catch (err) {
+            if (err.message && err.message.includes('no such table')) {
+                throw new Error(`테이블(${this.tableName})이 존재하지 않습니다.`);
+            } else {
+                throw err;
+            }
+        }
+        return query;   // TODO: 위치 try 밖으로 빼기
+    }
+
+    async $delete(p_where, trx) {
+        let pkCount = 0; // PK 조건 개수 카운트
+        const db = trx || this.db;
+        let builder;
+
+        try {
+            if (p_where instanceof MetaRow || _isObject(p_where)) {
+                builder = db.deleteFrom(this.tableName);
+            
+                this.columns.forEach((col, key) => {
+                    if(col.primaryKey !== true) return; // PK만 조건
+                    if(col.virtual === true) return;  // 가상 컬럼 스킵
+                    builder = builder.where(col.columnName, '=', p_where[col.columnName]);
+                    pkCount++;
+                });
+
+                // PK 조건이 없으면 예외 발생
+                if (pkCount === 0) {
+                    throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
+                }
+
+                // await builder.executeTakeFirst();
+                // return { affectedRows: res.numDeletedRows ?? 0 }
+
             } else {
                 throw new Error('Invalid row type');
             }
+        } catch (err) {
+            throw new Error('Invalid row type' + err.message);
+        }
+        return builder;
+    }
+
+    async $update(p_updOpt, trx) {
+        const change = {};
+        let pkCount = 0; // PK 조건 개수 카운트
+
+        try {
+            let query = await this.db.updateTable(this.tableName);
+
+            if (p_updOpt instanceof MetaRow) {
+                for (let i = 0; i < p_updOpt.count; i++) {
+                    // const key = p_row[i].columnName;
+                    const col = this.columns[i];
+                    if(col.primaryKey === true) continue; // PK만 조건
+                    if(col.virtual === true) continue;  // 가상 컬럼 스킵
+                    change[col.columnName] = p_updOpt[i];
+                }
+            } else if (_isObject(p_updOpt)) {
+                for (const key in p_updOpt) {
+                    if (!Object.prototype.hasOwnProperty.call(p_updOpt, key)) continue;
+                    const col = this.columns[key];
+                    if (!col) continue;
+                    if (col.primaryKey === true) continue; // PK만 조건
+                    if (col.virtual === true) continue;  // 가상 컬럼 스킵
+                    change[key] = p_updOpt[key];
+                }
+            } else {
+                throw new Error('Invalid row type');
+            }
+            query = query.set(change);
+
+            this.columns.forEach((col, key) => {
+                if(col.primaryKey === false) return; // PK만 조건
+                if(col.virtual == true) return;  // 가상 컬럼 스킵
+                query = query.where(col.columnName, '=', p_updOpt[col.columnName]);
+                pkCount++;
+            });
+            // PK 조건이 없으면 예외 발생
+            if (pkCount === 0) {
+                throw new Error('update: PK 조건이 없어 전체 테이블이 수정될 수 있습니다.');
+            }
+
+            const result = query;
+            return result;
 
         } catch (err) {
-            throw new Error('Invalid row type' + err.message + ', sql:'+ result?.sql);
+            throw new Error('Invalid row type' + err.message);
         }
     }
 
@@ -200,7 +332,7 @@ class SQLTable extends MetaTable {
         const info = await detectAndStoreDbInfo(this);
         this.profile.vendor = info.kind;
         this.profile.version = info.version;
-        this.profile.features = await resolveDbFeatures(info.kind, info.version);
+        this.profile.features = resolveDbFeatures(info.kind, info.version);
     }
 
     async create(trx) {
@@ -666,237 +798,291 @@ class SQLTable extends MetaTable {
         await this._event.emit('dropping', { table: this, db: db });
 
         // await db.schema.dropTable(this.tableName).ifExists().execute();
-        await this.$drop(trx).execute();
+        const builder = this.$drop(trx); 
+        await builder.execute();
 
         // post-drop event
         await this._event.emit('dropped', { table: this, db: db });
     }
 
-    // TODO: select 수정필요, 전달 where 조건 등, page, size 객체로 또는 숫자
-    async select(page = 1, size = 10, where = {}) {
-        // page: 1부터 시작, size: 페이지당 row 수
-        const limit = size > 0 ? size : 10;
-        const offset = page > 1 ? (page - 1) * limit : 0;
-        let rows = [];
 
-        if (this.connect == null) return rows;
+    async insert(p_row, trx) {
+        const db = trx || this.db;
+        let results = []
+        const data = {};
+        
+        await this._event.emit('inserting', { table: this, db: db });
 
-        try {
-            let query = this.db
-                .selectFrom(this.tableName)
-                .selectAll()
-                .limit(limit)
-                .offset(offset);
+        // TODO: select 리턴 처리
+        // const builders = await this.$insert(db);
+        // for (const b of builders) {
+        //     const r = await b.execute();
+        //     results.push(r);
+        // }
 
-            for (const key in where) {
-                if (this.columns.existColumnName(key) === false) continue;
-                if (Object.prototype.hasOwnProperty.call(where, key)) {
-                    query = query.where(key, '=', where[key]);
-                }
-            }
-            rows = await query.execute();
-
-        } catch (err) {
-            if (err.message && err.message.includes('no such table')) {
-                throw new Error(`테이블(${this.tableName})이 존재하지 않습니다.`);
+        const builder = await this.$insert(p_row, db);
+        const sql = builder.compile();
+        let result = await builder.executeTakeFirstOrThrow();
+        let builder2;
+        // features.hasReturning 가 없으면 insertId로 select
+        if (result.insertId && (typeof result.insertId === 'number' || typeof result.insertId === 'bigint')) {
+            // insertId 가 존재할 경우
+            if (result.insertId > 0) {
+                const id = this.columns.find(c => c.primaryKey === true && c.autoIncrement === true)?.columnName;
+                builder2 = await this.$select({ where: { [id]: result.insertId }, page: 1, size: 1 });
+                result = await builder2.executeTakeFirst();
             } else {
-                throw err;
+                const where = {};
+                for (const [k, v] of this.columns.entries()) {
+                    if (v.primaryKey === true && p_row[v.columnName] !== undefined ) {
+                        where[v.columnName] = p_row[v.columnName];
+                    }
+                }
+                builder2 = await this.$select({ where: where, page: 1, size: 1 });
+                result = await builder2.executeTakeFirst();
             }
+            console.log('22');
         }
 
-        rows.forEach(row => {
-            this.rows.add(row);
-        });
+        await this._event.emit('inserted', { table: this, db: db });
+
+        // const LEN = results.length;
+        // return results[LEN - 1];
+        return result;
+    }
+
+    async select(selOpt, trx) {
+        const db = trx || this.db;
+        // page: 1부터 시작, size: 페이지당 row 수
+        const limit = selOpt.size > 0 ? selOpt.size : 10;
+        const offset = selOpt.page > 1 ? (selOpt.page - 1) * limit : 0;
+        const fill = selOpt.fill === true ? true : false;
+        let rows = [];
+
+        if (!db) return rows;
+
+        await this._event.emit('selecting', { table: this, db: db });
+
+        const builder = await this.$select(selOpt, db);
+        rows = await builder.execute();
+
+        await this._event.emit('selected', { table: this, db: db });
+
+        if (fill === true) {
+            // this.rows.clear();
+            rows.forEach(row => {
+                this.rows.add(row);
+            });
+        }
 
         return rows;
     }
 
-    async insert(p_row, options = { execute: true }) {
-        let result = null;
-        const data = {};
+
+    // TODO: select 수정필요, 전달 where 조건 등, page, size 객체로 또는 숫자
+    // async select(page = 1, size = 10, where = {}) {
+    //     // page: 1부터 시작, size: 페이지당 row 수
+    //     const limit = size > 0 ? size : 10;
+    //     const offset = page > 1 ? (page - 1) * limit : 0;
+    //     let rows = [];
+
+    //     if (this.connect == null) return rows;
+
+    //     try {
+    //         let query = this.db
+    //             .selectFrom(this.tableName)
+    //             .selectAll()
+    //             .limit(limit)
+    //             .offset(offset);
+
+    //         for (const key in where) {
+    //             if (this.columns.existColumnName(key) === false) continue;
+    //             if (Object.prototype.hasOwnProperty.call(where, key)) {
+    //                 query = query.where(key, '=', where[key]);
+    //             }
+    //         }
+    //         rows = await query.execute();
+
+    //     } catch (err) {
+    //         if (err.message && err.message.includes('no such table')) {
+    //             throw new Error(`테이블(${this.tableName})이 존재하지 않습니다.`);
+    //         } else {
+    //             throw err;
+    //         }
+    //     }
+
+    //     rows.forEach(row => {
+    //         this.rows.add(row);
+    //     });
+
+    //     return rows;
+    // }
+
+    
+    // async insert(p_row, options = { execute: true }) {
+    //     let result = null;
+    //     const data = {};
         
-        if (this.profile.features?.returning === true) {
-            let query = await this.db.insertInto(this.tableName);
+    //     if (this.profile.features?.hasReturning === true) {
+    //         let query = await this.db.insertInto(this.tableName);
 
-            if (p_row instanceof MetaRow) {
-                for (let i = 0; i < p_row.count; i++) {
-                    const key = p_row[i].columnName;
-                    if (this.columns.existColumnName(key)) {
-                        data[key] = p_row[key];
-                    }
-                }
+    //         if (p_row instanceof MetaRow) {
+    //             for (let i = 0; i < p_row.count; i++) {
+    //                 const key = p_row[i].columnName;
+    //                 if (this.columns.existColumnName(key)) {
+    //                     data[key] = p_row[key];
+    //                 }
+    //             }
 
-            } else if (_isObject(p_row)) {
-                for (const key in p_row) {
-                    if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
-                    if (this.columns.existColumnName(key)) {
-                        data[key] = p_row[key];
-                    }
-                }
+    //         } else if (_isObject(p_row)) {
+    //             for (const key in p_row) {
+    //                 if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
+    //                 if (this.columns.existColumnName(key)) {
+    //                     data[key] = p_row[key];
+    //                 }
+    //             }
 
-            } else {
-                throw new Error('Invalid row type');
-            }
-
-
-            query = this.db.insertInto(this.tableName)
-                .values({ ...data })
-                .returningAll();
-
-            query.executeTakeFirstOrThrow();
-
-            
-
-        }
+    //         } else {
+    //             throw new Error('Invalid row type');
+    //         }
 
 
-        try {
-            // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
-            if (p_row instanceof MetaRow || _isObject(p_row)) {
-                // this.rows.add(p_row);
-                // TODO: p_row 에 대한 검사 필요
-                const pk = 'id'
-                const { [pk]: id, ...changes } = p_row
-                let query = this.db.insertInto(this.tableName).values({ ...changes });
+    //         query = this.db.insertInto(this.tableName)
+    //             .values({ ...data })
+    //             .returningAll();
+
+    //         const result = await query.executeTakeFirstOrThrow();
+
+    //         const sql = query.compile();
+    //         console.log(sql);
+    //     }
+
+
+    //     try {
+    //         // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
+    //         if (p_row instanceof MetaRow || _isObject(p_row)) {
+    //             // this.rows.add(p_row);
+    //             // TODO: p_row 에 대한 검사 필요
+    //             const pk = 'id'
+    //             const { [pk]: id, ...changes } = p_row
+    //             let query = this.db.insertInto(this.tableName).values({ ...changes });
                 
-                result = query.compile();
-                if (options.execute) await query.execute();
+    //             result = query.compile();
+    //             if (options.execute) await query.execute();
 
-                return result;
-            } else {
-                throw new Error('Invalid row type');
-            }
+    //             return result;
+    //         } else {
+    //             throw new Error('Invalid row type');
+    //         }
 
-        } catch (err) {
-            throw new Error('Invalid row type' + err.message + ', sql:'+ result?.sql);
-        }
+    //     } catch (err) {
+    //         throw new Error('Invalid row type' + err.message + ', sql:'+ result?.sql);
+    //     }
+    // }
+
+
+    async update(p_updOpt, trx) {
+        const db = trx || this.db;
+
+        await this._event.emit('updating', { table: this, db: db });
+        
+        const builder = await this.$update(p_updOpt, db);
+        const result = await builder.executeTakeFirst();
+        
+        await this._event.emit('updated', { table: this, db: db });
+        return result;
     }
 
     // POINT: 여기서 할것
-    async update(p_row) {
-        const change = {};
-        let pkCount = 0; // PK 조건 개수 카운트
+    // async update(p_row) {
+    //     const change = {};
+    //     let pkCount = 0; // PK 조건 개수 카운트
 
-        try {
-            let query = await this.db.updateTable(this.tableName);
+    //     try {
+    //         let query = await this.db.updateTable(this.tableName);
 
-            if (p_row instanceof MetaRow) {
-                for (let i = 0; i < p_row.count; i++) {
-                    // const key = p_row[i].columnName;
-                    const col = this.columns[i];
-                    if(col.primaryKey === true) continue; // PK만 조건
-                    if(col.virtual === true) continue;  // 가상 컬럼 스킵
-                    change[col.columnName] = p_row[i];
-                }
-            } else if (_isObject(p_row)) {
-                for (const key in p_row) {
-                    if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
-                    const col = this.columns[key];
-                    if (!col) continue;
-                    if (col.primaryKey === true) continue; // PK만 조건
-                    if (col.virtual === true) continue;  // 가상 컬럼 스킵
-                    change[key] = p_row[key];
-                }            
-            } else {
-                throw new Error('Invalid row type');
-            }
-            query = query.set(change);
+    //         if (p_row instanceof MetaRow) {
+    //             for (let i = 0; i < p_row.count; i++) {
+    //                 // const key = p_row[i].columnName;
+    //                 const col = this.columns[i];
+    //                 if(col.primaryKey === true) continue; // PK만 조건
+    //                 if(col.virtual === true) continue;  // 가상 컬럼 스킵
+    //                 change[col.columnName] = p_row[i];
+    //             }
+    //         } else if (_isObject(p_row)) {
+    //             for (const key in p_row) {
+    //                 if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
+    //                 const col = this.columns[key];
+    //                 if (!col) continue;
+    //                 if (col.primaryKey === true) continue; // PK만 조건
+    //                 if (col.virtual === true) continue;  // 가상 컬럼 스킵
+    //                 change[key] = p_row[key];
+    //             }            
+    //         } else {
+    //             throw new Error('Invalid row type');
+    //         }
+    //         query = query.set(change);
 
-            this.columns.forEach((col, key) => {
-                if(col.primaryKey === false) return; // PK만 조건
-                if(col.virtual == true) return;  // 가상 컬럼 스킵
-                query = query.where(col.columnName, '=', p_row[col.columnName]);
-                pkCount++;
-            });
-            // PK 조건이 없으면 예외 발생
-            if (pkCount === 0) {
-                throw new Error('update: PK 조건이 없어 전체 테이블이 수정될 수 있습니다.');
-            }
+    //         this.columns.forEach((col, key) => {
+    //             if(col.primaryKey === false) return; // PK만 조건
+    //             if(col.virtual == true) return;  // 가상 컬럼 스킵
+    //             query = query.where(col.columnName, '=', p_row[col.columnName]);
+    //             pkCount++;
+    //         });
+    //         // PK 조건이 없으면 예외 발생
+    //         if (pkCount === 0) {
+    //             throw new Error('update: PK 조건이 없어 전체 테이블이 수정될 수 있습니다.');
+    //         }
 
-            const result = await query.executeTakeFirst();
-            return result;
+    //         const result = await query.executeTakeFirst();
+    //         return result;
 
-        } catch (err) {
-            throw new Error('Invalid row type' + err.message);
-        }
+    //     } catch (err) {
+    //         throw new Error('Invalid row type' + err.message);
+    //     }
+    // }
 
-        // if (p_row instanceof MetaRow || _isObject(p_row)) {
-        //     // const row = p_row instanceof MetaRow ? p_row.entries() : Object.entries(p_row);
-            
-            
-        //     // this.rows.update(p_row);
-        //     // return await this.db.updateTable(this.tableName).values(p_row).execute();
-        //     // const pk = 'id'
-        //     // const { [pk]: id, ...changes } = p_row
-        //     // const res = await this.db
-        //     //     .updateTable(this.tableName)
-        //     //     .set(changes)
-        //     //     .where('id', '=', id)
-        //     //     .executeTakeFirst()
-        //     // return { affectedRows: res.numUpdatedRows ?? 0 }
+    async delete(p_where, trx) {
+        const db = trx || this.db;
 
-        //     let query = await this.db.updateTable(this.tableName);
-        //     const change = {};
+        await this._event.emit('deleting', { table: this, db: db });
+        
+        const builder = await this.$delete(p_where, db);
+        const result = await builder.execute();
 
-        //     for (let i = 0, key, col; i < row.length; i++) {
-        //         const col = row[i];
-
-        //     }
-            
-        //     for ([key, col] of row) {
-        //         if(this.columns?.key.primaryKey === true) continue; // PK만 조건
-        //         if(this.columns?.key.virtual === true) continue;  // 가상 컬럼 스킵
-
-        //         change[col.columnName] = p_row[col.columnName];
-        //     }
-        //     // this.columns.forEach((col, key) => {
-        //     //     if(col.primaryKey === true) return; // PK만 조건
-        //     //     if(col.virtual !== true) return;  // 가상 컬럼 스킵
-        //     //     change[col.columnName] = p_row[col.columnName];
-        //     // });
-        //     query = query.set(change);
-
-        //     this.columns.forEach((col, key) => {
-        //         if(col.primaryKey !== true) return; // PK만 조건
-        //         if(col.virtual == true) return;  // 가상 컬럼 스킵
-        //         query = query.where(col.columnName, '=', row[col.columnName]);
-        //     });
-        //     await query.executeTakeFirst();
-
-        // } else {
-        //     throw new Error('Invalid row type');
-        // }
+        await this._event.emit('deleted', { table: this, db: db });
+        return result;
     }
 
-    async delete(p_row) {
-        let pkCount = 0; // PK 조건 개수 카운트
+    // async delete(p_row) {
+    //     let pkCount = 0; // PK 조건 개수 카운트
 
-        try {
-            if (p_row instanceof MetaRow || _isObject(p_row)) {
-                let query = await this.db.deleteFrom(this.tableName);
+    //     try {
+    //         if (p_row instanceof MetaRow || _isObject(p_row)) {
+    //             let query = await this.db.deleteFrom(this.tableName);
                 
-                this.columns.forEach((col, key) => {
-                    if(col.primaryKey !== true) return; // PK만 조건
-                    if(col.virtual === true) return;  // 가상 컬럼 스킵
-                    query = query.where(col.columnName, '=', p_row[col.columnName]);
-                    pkCount++;
-                });
+    //             this.columns.forEach((col, key) => {
+    //                 if(col.primaryKey !== true) return; // PK만 조건
+    //                 if(col.virtual === true) return;  // 가상 컬럼 스킵
+    //                 query = query.where(col.columnName, '=', p_row[col.columnName]);
+    //                 pkCount++;
+    //             });
 
-                // PK 조건이 없으면 예외 발생
-                if (pkCount === 0) {
-                    throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
-                }
+    //             // PK 조건이 없으면 예외 발생
+    //             if (pkCount === 0) {
+    //                 throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
+    //             }
 
-                await query.executeTakeFirst();
-                // return { affectedRows: res.numDeletedRows ?? 0 }
+    //             await query.executeTakeFirst();
+    //             // return { affectedRows: res.numDeletedRows ?? 0 }
 
-            } else {
-                throw new Error('Invalid row type');
-            }
-        } catch (err) {
-            throw new Error('Invalid row type' + err.message);
-        }
-    }
+    //         } else {
+    //             throw new Error('Invalid row type');
+    //         }
+    //     } catch (err) {
+    //         throw new Error('Invalid row type' + err.message);
+    //     }
+    // }
 
     /**
      * @override
@@ -952,6 +1138,26 @@ class SQLTable extends MetaTable {
         const builder = await this.$drop();
         return builder.compile();
     }
+
+    async getInsertSQL(p_row) {
+        const builder = await this.$insert(p_row);
+        return builder.compile();
+    }
+
+    async getSelectSQL(selOpt) {
+        const builder = await this.$select(selOpt);
+        return builder.compile();
+    }
+
+    async getUpdateSQL(p_updOpt) {
+        const builder = await this.$update(p_updOpt);
+        return builder.compile();
+    }
+
+    async getDeleteSQL(p_where) {
+        const builder = await this.$delete(p_where);
+        return builder.compile();
+    }  
 }
 
 export default SQLTable;

@@ -105,7 +105,7 @@ describe("[target: sql-table.js]", () => {
                 })
             };
             table.connect = conn;
-    
+            await table.init();
             table.columns.add('id', {primaryKey: true});
             table.columns.add('name');
             table.columns.add('age');
@@ -131,7 +131,7 @@ describe("[target: sql-table.js]", () => {
             await table.update({ id: 1, name: '홍길동2', age: 32 });
             await table.delete({ id: 2 });
     
-            table.rows.add({ name: '이순신', age: 50 });
+            table.rows.add({ id:3, name: '이순신', age: 50 });  // TODO: id 값이 존재햐야함
             table.rows[0].name = '이순신2';
     
             await table.acceptChanges();
@@ -203,11 +203,13 @@ describe("[target: sql-table.js]", () => {
             expect(rows2[0].name).toBe('홍길동2');
             expect(rows2[0].age).toBe(32);
     
-            const rows3 = await table.select(1, 10);
+            const rows3 = await table.select({ page: 1, size: 10, fill: true });
     
             expect(rows3.length).toBe(3);
             expect(table.getChanges().length).toBe(3);
             expect(table.rows.count).toBe(6);
+
+            // table.insert({ name: '강감찬', age: 60 });
     
         });
     
