@@ -41,7 +41,7 @@ describe('[target: create-table-mysql8016.test.js]', () => {
         await users.init();
 
         orders = new SQLTable('orders');
-        orders.connect = users.connect;
+        orders.connect = conn;
 
         users.columns.add('id', { dataType: 'int', primaryKey: true, autoIncrement: true, nullable: false });
         users.columns.add('email', { dataType: 'varchar(255)', unique: true, nullable: false });
@@ -317,7 +317,7 @@ describe('[target: create-table-mysql8016.test.js]', () => {
                 name: 'Table Insert',
                 created_at: new Date()
             });
-                expect(user.id).toBeDefined();
+            expect(user.id).toBeDefined();
 
             const order = await orders.insert({
                 user_id: user.id,

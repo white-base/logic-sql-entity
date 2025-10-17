@@ -73,6 +73,7 @@ class SQLContext extends MetaElement {
     get connect() {
         return this._connect;
     }
+
     set connect(p_connect) {
         this._connect = p_connect;
     }
@@ -80,14 +81,6 @@ class SQLContext extends MetaElement {
     get db () {
         if (!this._db) {
             this._db = new Kysely(this._connect);
-            // DB 종류
-            // resolveDbFeatures(this._db, this._connect);
-
-            // const info = detectAndStoreDbInfo({ db: this._db, connect: this._connect }, { force: false });
-            // this.vendor = info.kind;
-            // this.features = resolveDbFeatures(info.kind, info.version);
-
-            // resolveDbFeatures()
         }
         return this._db;
     }
@@ -367,39 +360,6 @@ class SQLContext extends MetaElement {
                 await tbl.create(trx);
             }
         }
-
-        // schemaList.forEach((ctx) => {
-        //     ctx.connect = this.connect;
-        //     ctx.profile = this.profile;
-        //     const context = ctx;
-        //     ctx.tables.forEach((tbl) => {
-        //         tbl.connect = this.connect;
-        //         tbl.profile = this.profile;
-        //         await tbl.create(trx);
-        //         // console.log(tbl.tableName);
-        //     });
-        // });
-
-        // for (let idx = 0; idx < this.contexts.length; idx++) {
-        //     const ctx = this.contexts[idx];
-        //     // if (!ctx) continue;
-        //     if (typeof ctx.createSchema === 'function') {
-        //         ctx.connect = this.connect;
-        //         ctx.profile = this.profile;
-        //         await ctx.createSchema(trx);
-        //     }
-        // }
-
-        // // for (const [index, table] of this.tables.entries()) {
-        // for (let idx = 0; idx < this.tables.length; idx++) {
-        //     const table = this.tables[idx];
-        //     // if (!table) continue;
-        //     if (typeof table.create === 'function') {
-        //         table.connect = this.connect;
-        //         table.profile = this.profile;
-        //         await table.create(trx);
-        //     }
-        // }
     }
 
     async dropSchema(dbOrConn = null) {
@@ -435,52 +395,6 @@ class SQLContext extends MetaElement {
                 await tbl.drop(trx);
             }
         }
-        
-        // 2. Drop nested contexts first (child-first to avoid FK issues)
-        // for (let i = this.contexts.length - 1; i >= 0; i--) {
-        //     const ctx = this.contexts[i];
-        //     ctx.connect = ctx.connect || this.connect;
-        //     ctx.profile = ctx.profile || this.profile;
-
-        //     const depend = this.getUnloadContext(i);
-
-        //     for (let j = 0; j < depend.length; j++) {
-        //         const d_ctx = depend[j];
-        //         d_ctx.connect = d_ctx.connect || this.connect;
-        //         d_ctx.profile = d_ctx.profile || this.profile;
-
-        //         for (let k =  d_ctx.tables.length - 1; k >= 0; k--) {
-        //             const tbl = d_ctx.tables[k];
-        //             tbl.connect = tbl.connect || this.connect;
-        //             tbl.profile = tbl.profile || this.profile;
-        //             await tbl.drop(trx);
-        //         }
-        //     }
-
-        //     for (let k =  this.tables.length - 1; k >= 0; k--) {
-        //         const tbl = this.tables[k];
-        //         await tbl.drop(trx);
-        //     }
-        // }
-
-
-        // 1. 고전방식
-        // // 1) Drop this context's tables
-        // for (let idx = this.tables.length - 1; idx >= 0; idx--) {
-        //     // const table = this.tables[idx];
-        //     // const tableName = table.tableName || table._name || String(table);
-        //     // await trx.schema.dropTable(tableName).ifExists().execute();
-
-        //     await this.tables[idx].drop(trx);
-        // }
-        
-        // // 2) Drop nested contexts first (child-first to avoid FK issues)
-        // for (let idx = this.contexts.length - 1; idx >= 0; idx--) {
-        //     const ctx = this.contexts[idx];
-        //     ctx.connect = this.connect;
-        //     ctx.profile = this.profile;
-        //     await ctx.dropSchema(trx);
-        // }
     }
 
     ensureSchema() {
@@ -494,10 +408,6 @@ class SQLContext extends MetaElement {
     diffSchema() {
         // Compare the current schema with the database schema
     }
-
-    // addTable(table) {
-    //     this.tables.addValue(table.name, table);
-    // }
 
     addColumn(tableName, column, options = {}) {
 

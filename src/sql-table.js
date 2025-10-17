@@ -28,59 +28,19 @@ class SQLTable extends MetaTable {
     constructor(p_name) {
         super(p_name);
 
-        // this._rows        = new SQLRowCollection(this);
-        // this._columns     = new MetaTableColumnCollection(this, SQLColumn);
         this.columns._baseType = SQLColumn; // 강제 설정
         this.rows.autoChanges = false;
 
         this._connect     = null;
         this._db          = null;
         this._profile     = { vendor: null, version: null, features: null }; // { vendor: 'mysql' | 'postgres' | 'sqlite' | 'mssql' }
-
         this._event       = new EventEmitter();
-        
-        
-        // /**
-        //  * 엔티티의 데이터(로우) 컬렉션
-        //  * 
-        //  * @readonly
-        //  * @member {MetaRowCollection} BaseEntity#rows
-        //  */
-        // Object.defineProperty(this, 'rows', {
-        //     get: function() { return this._rows; },
-        //     configurable: true,
-        //     enumerable: true
-        // });
-
-        // /**
-        //  * 엔티티의 컬럼 컬렉션
-        //  * @readonly
-        //  * @member {MetaColumnCollection} BaseEntity#columns
-        //  */
-        // Object.defineProperty(this, 'columns', {
-        //     get: function() { return columns; },
-        //     set: function(nVal) { 
-        //         if (!(nVal instanceof MetaTableColumnCollection)) throw new ExtendError(/EL05412/, null, []);
-        //         if (this.rows.count > 0) throw new ExtendError(/EL05413/, null, [this.constructor.name, this.rows.count]);
-        //         columns = nVal;
-        //     },
-        //     configurable: true,
-        //     enumerable: true
-        // });
     }
-
-
-    // get rows() {
-    //     return this._rows;
-    // }
-
-    // get columns() {
-    //     return this._columns;
-    // }
 
     get connect() {
         return this._connect;
     }
+
     set connect(p_connect) {
         this._connect = p_connect;
     }
@@ -95,6 +55,7 @@ class SQLTable extends MetaTable {
     get profile() {
         return this._profile;
     }
+
     set profile(p) {
         this._profile = p;
     }
@@ -147,18 +108,16 @@ class SQLTable extends MetaTable {
         return this._event.on('deleted', handler);
     }
 
+    onDeleteFailed(handler) {
+        return this._event.on('deleteFailed', handler);
+    }
+
     async $create(trx) {
         const builders = [];
 
         builders.push(await this._createStage1(trx));    
         builders.push(...await this._createStage2_FKs(trx));
         builders.push(...await this._createStage3_Indexes(trx));
-        // builders.push(await this._createStage1(trx, { execute: false }));
-        // builders.push(await this._createStage2_FKs(trx, { execute: false }));
-        // builders.push(await this._createStage3_Indexes(trx, { execute: false }));
-        // await this._createStage1(trx);
-        // await this._createStage2_FKs(trx);
-        // await this._createStage3_Indexes(trx);
         return builders;
     }
 
@@ -233,8 +192,6 @@ class SQLTable extends MetaTable {
                     query = query.where(key, '=', selOpt.where[key]);
                 }
             }
-
-
             // rows = await query.execute();
             
         } catch (err) {
@@ -335,15 +292,15 @@ class SQLTable extends MetaTable {
         this.profile.features = resolveDbFeatures(info.kind, info.version);
     }
 
+    getPrimaryKeyColumns() {
+        return this.columns.filter(c => c.primaryKey && !c.virtual).map(c => c.columnName);
+    }
+
     async create(trx) {
         const db = trx || this.db;
 
         // pre-create event   TODO: 파라메터 정리 필요
         await this._event.emit('creating', { table: this, db: db });
-
-        // await this._createStage1(trx);
-        // await this._createStage2_FKs(trx);
-        // await this._createStage3_Indexes(trx);
 
         const builders = await this.$create(db);
         for (const b of builders) {
@@ -352,73 +309,6 @@ class SQLTable extends MetaTable {
         // post-create event
         await this._event.emit('created', { table: this, db: db });
     }
-
-    // 폐기
-    // async _create(trx) {
-        
-    //     const db = trx || this.db;
-
-    //     // pre-create event   TODO: 파라메터 정리 필요
-    //     await this._event.emit('creating', { table: this, db: db });
-
-    //     // table creation
-    //     let tableBuilder = db.schema.createTable(this.tableName);
-    //     for (const [key, col] of this.columns.entries()) {
-    //         const options = normalizeOptions(col);
-    //         const name = (typeof col.name === 'string' && col.name) ? col.name : key;
-    //         const type = col.dataType || 'text';
-    //         tableBuilder = tableBuilder.addColumn(name, type, options);
-    //     }
-    //     await tableBuilder.execute();
-
-
-    //     // foreign key creation
-
-    //     // index creation
-    //     const indexDefs = collectIndexGroups(this.tableName, this.columns);
-    //     for (const indexDef of indexDefs) {
-    //         // const isSqlite = this._connect?.dialect?.constructor?.name === 'SqliteDialect';
-            
-    //         if (this.profile.vendor === 'sqlite') {
-    //             await db.schema.createIndex(indexDef.name)
-    //                 .on(this.tableName)
-    //                 .columns(indexDef.columns)
-    //                 .execute();
-    //         }
-    //     }
-
-    //     // post-create event
-    //     await this._event.emit('created', { table: this, db: db });
-
-    //     // inner function
-    //     const chainOptionFns = (fns = []) => (col) => fns.reduce((acc, fn) => fn(acc), col);
-        
-    //     function normalizeOptions(options) {
-    //         // if (!options) return undefined;
-    //         // if (typeof options === 'function') return options;
-    //         // if (Array.isArray(options)) return chainOptionFns(options);
-    //         return buildColumnOptionsFromDecl(options);
-    //     };
-
-    //     function buildColumnOptionsFromDecl(def = {}) {
-    //         return (col) => {
-    //             if (def.pk) col = col.primaryKey();
-    //             if (def.autoIncrement) col = col.autoIncrement();
-    //             if (def.notNull) col = col.notNull();
-    //             if (def.unique) col = col.unique();
-    //             // if (def.unsigned && typeof col.unsigned === 'function') col = col.unsigned();
-    //             // if (def.defaultTo !== undefined) col = col.defaultTo(def.defaultTo);
-    //             // if (def.references) {
-    //             //     const r = def.references;
-    //             //     col = col.references(`${r.table}.${r.column}`);
-    //             //     if (r.onDelete) col = col.onDelete(r.onDelete);
-    //             //     if (r.onUpdate) col = col.onUpdate(r.onUpdate);
-    //             // }
-    //             // if (def.check) col = col.check(def.check);
-    //             return col;
-    //         };
-    //     }
-    // }
 
     // ############################################
     /* ============================================================
@@ -626,13 +516,6 @@ class SQLTable extends MetaTable {
         return builders;
 }
 
-    // /** 편의 메서드: 3단계 순차 실행 */
-    // async create3Stages(trx) {
-    //     await this.createStage1(trx);
-    //     await this.createStage2_FKs(trx);
-    //     await this.createStage3_Indexes(trx);
-    // }
-
     /* ================= 내부 유틸 ================= */
 
     /** FK 그룹 수집: SQLColumn.references 규약 기반 */
@@ -662,135 +545,6 @@ class SQLTable extends MetaTable {
         return groups;
     }
 
-
-    // ============================================
-    /**
-     * 테이블 생성 및 PK 생성 (내부용)
-     */
-    // async _createTableWithPK(trx) {
-    //     const db = trx || this.db;
-
-    //     // pre-create event
-    //     await this._event.emit('creating', { table: this, db: db });
-
-    //     // 테이블 생성
-    //     let tableBuilder = db.schema.createTable(this.tableName);
-    //     for (const [key, col] of this.columns.entries()) {
-    //         const options = (col) => {
-    //             let c = col;
-    //             if (col.pk) c = c.primaryKey();
-    //             if (col.autoIncrement) c = c.autoIncrement();
-    //             if (col.notNull) c = c.notNull();
-    //             if (col.unique) c = c.unique();
-    //             return c;
-    //         };
-    //         const name = (typeof col.name === 'string' && col.name) ? col.name : key;
-    //         const type = col.dataType || 'text';
-    //         tableBuilder = tableBuilder.addColumn(name, type, options);
-    //     }
-    //     await tableBuilder.execute();
-
-    //     // post-create event
-    //     await this._event.emit('created', { table: this, db: db });
-    // }
-    
-    // /**
-    //  * 외래키(Foreign Key) 제약조건 생성 메서드
-    //  * @param {object} trx - 트랜잭션 객체(optional)
-    //  */
-    // async createForeignKeys(trx) {
-    //     const db = trx || this.db;
-    //     // TODO: 실제 FK 정의에 따라 구현 필요
-    //     // 예시: this.columns에서 FK 정의를 찾아 생성
-    //     for (const [key, col] of this.columns.entries()) {
-    //         if (col.references) {
-    //             const ref = col.references;
-    //             await db.schema.alterTable(this.tableName)
-    //                 .addForeignKeyConstraint(
-    //                     `${this.tableName}_${key}_fk`,
-    //                     [col.name || key],
-    //                     ref.table,
-    //                     [ref.column],
-    //                     (builder) => {
-    //                         if (ref.onDelete) builder.onDelete(ref.onDelete);
-    //                         if (ref.onUpdate) builder.onUpdate(ref.onUpdate);
-    //                     }
-    //                 )
-    //                 .execute();
-    //         }
-    //     }
-    // }
-    
-    // /**
-    //  * 복합(Composite) PK 생성 메서드
-    //  * @param {string[]} columns - PK로 지정할 컬럼명 배열
-    //  * @param {object} trx - 트랜잭션 객체(optional)
-    //  */
-    // async createPrimaryKey(columns, trx) {
-    //     const db = trx || this.db;
-    //     await db.schema.alterTable(this.tableName)
-    //         .addPrimaryKeyConstraint(`${this.tableName}_pk`, columns)
-    //         .execute();
-    // }
-
-    // /**
-    //  * FK(외래키) 제약조건 생성 메서드
-    //  * @param {Array} foreignKeys - FK 정의 배열 [{ columns, refTable, refColumns, onDelete, onUpdate }]
-    //  * @param {object} trx - 트랜잭션 객체(optional)
-    //  */
-    // async createForeignKeyConstraints(foreignKeys, trx) {
-    //     const db = trx || this.db;
-    //     for (const fk of foreignKeys) {
-    //         await db.schema.alterTable(this.tableName)
-    //             .addForeignKeyConstraint(
-    //                 `${this.tableName}_${fk.columns.join('_')}_fk`,
-    //                 fk.columns,
-    //                 fk.refTable,
-    //                 fk.refColumns,
-    //                 (builder) => {
-    //                     if (fk.onDelete) builder.onDelete(fk.onDelete);
-    //                     if (fk.onUpdate) builder.onUpdate(fk.onUpdate);
-    //                 }
-    //             )
-    //             .execute();
-    //     }
-    // }
-
-    // /**
-    //  * 인덱스 생성 메서드
-    //  * @param {Array} indexes - 인덱스 정의 배열 [{ name, columns, unique }]
-    //  * @param {object} trx - 트랜잭션 객체(optional)
-    //  */
-    // async createIndexDefinitions(indexes, trx) {
-    //     const db = trx || this.db;
-    //     for (const idx of indexes) {
-    //         let builder = db.schema.createIndex(idx.name)
-    //             .on(this.tableName)
-    //             .columns(idx.columns);
-    //         if (idx.unique) builder = builder.unique();
-    //         await builder.execute();
-    //     }
-    // }
-    // /**
-    //  * 인덱스 생성 메서드
-    //  * @param {object} trx - 트랜잭션 객체(optional)
-    //  */
-    // async createIndexes(trx) {
-    //     const db = trx || this.db;
-    //     const indexDefs = collectIndexGroups(this.tableName, this.columns);
-    //     for (const indexDef of indexDefs) {
-    //         if (this.profile.vendor === 'sqlite') {
-    //             await db.schema.createIndex(indexDef.name)
-    //                 .on(this.tableName)
-    //                 .columns(indexDef.columns)
-    //                 .execute();
-    //         }
-    //     }
-    // }
-    // ============================================
-
-
-
     async drop(trx) {
         const db = trx || this.db;
 
@@ -804,7 +558,6 @@ class SQLTable extends MetaTable {
         // post-drop event
         await this._event.emit('dropped', { table: this, db: db });
     }
-
 
     async insert(p_row, trx) {
         const db = trx || this.db;
@@ -878,109 +631,6 @@ class SQLTable extends MetaTable {
         return rows;
     }
 
-
-    // TODO: select 수정필요, 전달 where 조건 등, page, size 객체로 또는 숫자
-    // async select(page = 1, size = 10, where = {}) {
-    //     // page: 1부터 시작, size: 페이지당 row 수
-    //     const limit = size > 0 ? size : 10;
-    //     const offset = page > 1 ? (page - 1) * limit : 0;
-    //     let rows = [];
-
-    //     if (this.connect == null) return rows;
-
-    //     try {
-    //         let query = this.db
-    //             .selectFrom(this.tableName)
-    //             .selectAll()
-    //             .limit(limit)
-    //             .offset(offset);
-
-    //         for (const key in where) {
-    //             if (this.columns.existColumnName(key) === false) continue;
-    //             if (Object.prototype.hasOwnProperty.call(where, key)) {
-    //                 query = query.where(key, '=', where[key]);
-    //             }
-    //         }
-    //         rows = await query.execute();
-
-    //     } catch (err) {
-    //         if (err.message && err.message.includes('no such table')) {
-    //             throw new Error(`테이블(${this.tableName})이 존재하지 않습니다.`);
-    //         } else {
-    //             throw err;
-    //         }
-    //     }
-
-    //     rows.forEach(row => {
-    //         this.rows.add(row);
-    //     });
-
-    //     return rows;
-    // }
-
-    
-    // async insert(p_row, options = { execute: true }) {
-    //     let result = null;
-    //     const data = {};
-        
-    //     if (this.profile.features?.hasReturning === true) {
-    //         let query = await this.db.insertInto(this.tableName);
-
-    //         if (p_row instanceof MetaRow) {
-    //             for (let i = 0; i < p_row.count; i++) {
-    //                 const key = p_row[i].columnName;
-    //                 if (this.columns.existColumnName(key)) {
-    //                     data[key] = p_row[key];
-    //                 }
-    //             }
-
-    //         } else if (_isObject(p_row)) {
-    //             for (const key in p_row) {
-    //                 if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
-    //                 if (this.columns.existColumnName(key)) {
-    //                     data[key] = p_row[key];
-    //                 }
-    //             }
-
-    //         } else {
-    //             throw new Error('Invalid row type');
-    //         }
-
-
-    //         query = this.db.insertInto(this.tableName)
-    //             .values({ ...data })
-    //             .returningAll();
-
-    //         const result = await query.executeTakeFirstOrThrow();
-
-    //         const sql = query.compile();
-    //         console.log(sql);
-    //     }
-
-
-    //     try {
-    //         // if (p_row instanceof this.rows._elemTypes || _isObject(p_row)) { TODO: 컬렉션 타입확인필요
-    //         if (p_row instanceof MetaRow || _isObject(p_row)) {
-    //             // this.rows.add(p_row);
-    //             // TODO: p_row 에 대한 검사 필요
-    //             const pk = 'id'
-    //             const { [pk]: id, ...changes } = p_row
-    //             let query = this.db.insertInto(this.tableName).values({ ...changes });
-                
-    //             result = query.compile();
-    //             if (options.execute) await query.execute();
-
-    //             return result;
-    //         } else {
-    //             throw new Error('Invalid row type');
-    //         }
-
-    //     } catch (err) {
-    //         throw new Error('Invalid row type' + err.message + ', sql:'+ result?.sql);
-    //     }
-    // }
-
-
     async update(p_updOpt, trx) {
         const db = trx || this.db;
 
@@ -993,55 +643,6 @@ class SQLTable extends MetaTable {
         return result;
     }
 
-    // POINT: 여기서 할것
-    // async update(p_row) {
-    //     const change = {};
-    //     let pkCount = 0; // PK 조건 개수 카운트
-
-    //     try {
-    //         let query = await this.db.updateTable(this.tableName);
-
-    //         if (p_row instanceof MetaRow) {
-    //             for (let i = 0; i < p_row.count; i++) {
-    //                 // const key = p_row[i].columnName;
-    //                 const col = this.columns[i];
-    //                 if(col.primaryKey === true) continue; // PK만 조건
-    //                 if(col.virtual === true) continue;  // 가상 컬럼 스킵
-    //                 change[col.columnName] = p_row[i];
-    //             }
-    //         } else if (_isObject(p_row)) {
-    //             for (const key in p_row) {
-    //                 if (!Object.prototype.hasOwnProperty.call(p_row, key)) continue;
-    //                 const col = this.columns[key];
-    //                 if (!col) continue;
-    //                 if (col.primaryKey === true) continue; // PK만 조건
-    //                 if (col.virtual === true) continue;  // 가상 컬럼 스킵
-    //                 change[key] = p_row[key];
-    //             }            
-    //         } else {
-    //             throw new Error('Invalid row type');
-    //         }
-    //         query = query.set(change);
-
-    //         this.columns.forEach((col, key) => {
-    //             if(col.primaryKey === false) return; // PK만 조건
-    //             if(col.virtual == true) return;  // 가상 컬럼 스킵
-    //             query = query.where(col.columnName, '=', p_row[col.columnName]);
-    //             pkCount++;
-    //         });
-    //         // PK 조건이 없으면 예외 발생
-    //         if (pkCount === 0) {
-    //             throw new Error('update: PK 조건이 없어 전체 테이블이 수정될 수 있습니다.');
-    //         }
-
-    //         const result = await query.executeTakeFirst();
-    //         return result;
-
-    //     } catch (err) {
-    //         throw new Error('Invalid row type' + err.message);
-    //     }
-    // }
-
     async delete(p_where, trx) {
         const db = trx || this.db;
 
@@ -1053,36 +654,6 @@ class SQLTable extends MetaTable {
         await this._event.emit('deleted', { table: this, db: db });
         return result;
     }
-
-    // async delete(p_row) {
-    //     let pkCount = 0; // PK 조건 개수 카운트
-
-    //     try {
-    //         if (p_row instanceof MetaRow || _isObject(p_row)) {
-    //             let query = await this.db.deleteFrom(this.tableName);
-                
-    //             this.columns.forEach((col, key) => {
-    //                 if(col.primaryKey !== true) return; // PK만 조건
-    //                 if(col.virtual === true) return;  // 가상 컬럼 스킵
-    //                 query = query.where(col.columnName, '=', p_row[col.columnName]);
-    //                 pkCount++;
-    //             });
-
-    //             // PK 조건이 없으면 예외 발생
-    //             if (pkCount === 0) {
-    //                 throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
-    //             }
-
-    //             await query.executeTakeFirst();
-    //             // return { affectedRows: res.numDeletedRows ?? 0 }
-
-    //         } else {
-    //             throw new Error('Invalid row type');
-    //         }
-    //     } catch (err) {
-    //         throw new Error('Invalid row type' + err.message);
-    //     }
-    // }
 
     /**
      * @override
@@ -1113,15 +684,6 @@ class SQLTable extends MetaTable {
         this.rows.rollback();
         //TODO: DB에서 처리할 지 검토
     }
-
-    // async getCreateDDL(trx) {
-    //     const sql = [];
-
-    //     sql.push(await this._createStage1(trx, { execute: false })); // 재확인
-    //     sql.push(...await this._createStage2_FKs(trx, { execute: false }));
-    //     sql.push(...await this._createStage3_Indexes(trx, { execute: false }));
-    //     return sql;
-    // }
 
     async getCreateSQL() {
         const list = [];
