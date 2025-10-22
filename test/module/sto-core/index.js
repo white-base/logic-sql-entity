@@ -49,5 +49,12 @@ ctxStore.tables['sto_master'].columns.add('del_yn', {
     visible: false
 });
 
+// override delete operation for soft delete
+// ctxStore.getTable('sto_master').delete = function(params) {
+//     // Soft delete implementation
+//     const stoId = params.sto_id;
+//     return `UPDATE sto_master SET del_yn = 'Y', update_dt = CURRENT_TIMESTAMP WHERE sto_id = '${stoId}';`;
+// };
+
 export default ctxStore;
 export { ctxStore };

@@ -719,7 +719,160 @@ class SQLTable extends MetaTable {
     async getDeleteSQL(p_where) {
         const builder = await this.$delete(p_where);
         return builder.compile();
-    }  
+    }
+    
+    // ############################################
+
+    $getColumns(p_data, p_type) {
+        const data = {};
+        const type = p_type || 'all'; // 'pk' | 'data' | 'all'
+        
+        if (p_data instanceof MetaRow) {
+            for (let i = 0; i < p_data.count; i++) {
+                const key = p_data.indexToKey(i);
+                const col = this.columns[key];
+                
+                // 컬럼 타입별 필터링
+                if (!col || p_data[key] === undefined) continue;
+                if (type === 'pk' && (!col.primaryKey || col.virtual)) continue;
+                if (type === 'data' && col.virtual) continue;
+
+                data[key] = p_data[key];
+            }
+        } else if (isObject(p_data)) {
+            for (const [key, col] of this.columns.entries()) {
+                // 컬럼 타입별 필터링
+                if (!col || p_data[key] === undefined) continue;
+                if (type === 'pk' && (!col.primaryKey || col.virtual)) continue;
+                if (type === 'data' && col.virtual) continue;
+                
+                data[key] = p_data[key];
+            }
+        } else {
+            throw new Error('Invalid row type');
+        }
+    
+        return data;
+    }
+    
+    deleteBuilder(p_where, p_options) {
+        const db = p_options.trx || this.db;
+        let pk = {};
+        let builder;
+
+        if (p_where instanceof MetaRow) pk = this.$getColumns(p_where, 'pk');
+        else if (isObject(p_where)) pk = this.$getColumns(p_where, 'data');
+        else throw new Error('Invalid row type');
+
+        if (pk.length === 0) throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
+        
+        builder = db.deleteFrom(this.tableName);
+        for (const k in pk) {
+            const value = pk[k];
+            if (value === undefined) {
+                throw new Error(`delete: PK 컬럼 "${k}" 값이 undefined 입니다.`);
+            }
+            if (Array.isArray(value)) {
+                builder = builder.where(k, value[0], value[1]);
+                continue;
+            }
+            builder = builder.where(k, '=', value);
+        }
+
+        // pk.forEach((v, k) => {
+        //     builder = builder ? builder.where(k, '=', v) : db.deleteFrom(this._name).where(k, '=', v);
+        // });
+
+        // const builder = db.deleteFrom(this._name).where(pk);
+        return builder;
+    }
+
+    async delete_(p_where, p_options) {
+        const db   = p_options.trx || this.db;
+        const safe = { requireTrx: true, maxDeletableRows: 1, ...p_options };
+        const dryRun = safe.dryRun === true ? true : false;
+
+        if (safe.requireTrx && !p_options.trx) {
+            throw new Error('delete requires an explicit transaction (requireTrx=true).');
+        }
+
+        await this._event.emit('deleting', { table: this, db: db, options: p_options });
+
+        try {
+            const builder = this.deleteBuilder(p_where, p_options);
+            if (dryRun) {
+                await this._event.emit('deleted', { table: this, db: db, options: safe });
+                return builder.compile();
+            }
+
+            const result = await builder.execute();
+            const normalized = this.normalizeDeleteResult(result);
+
+            this.enforceAffectLimit(normalized.affectedRows, safe.maxDeletableRows);
+            await this._event.emit('deleted', { table: this, db: db, options: safe });
+            return normalized;
+
+        } catch (error) {
+            await this._event.emit('deleteError', { table: this, db: db, options: safe, error });
+            throw error;
+        }
+    }
+
+    normalizeDeleteResult(result) {
+        // 배열인 경우: 여러 드라이버/트랜잭션 반환 형태 처리
+        if (Array.isArray(result)) {
+            if (result.length === 0) {
+                return { affectedRows: 0, rows: [] };
+            }
+            const first = result[0];
+
+            // 첫 요소가 DeleteResult/OkPacket 형태인지 확인
+            const candidate = first && typeof first === 'object'
+                ? (first.numDeletedRows ?? first.affectedRows ?? first.affected_rows ?? null)
+                : null;
+
+            if (candidate != null) {
+                // bigint일 수 있으므로 숫자로 변환
+                const affected = typeof candidate === 'bigint' ? Number(candidate) : Number(candidate);
+                return { affectedRows: isNaN(affected) ? 0 : affected, rows: result };
+            }
+
+            // 그 외에는 결과 배열을 실제 행 배열로 간주
+            return { affectedRows: result.length, rows: result };
+        }
+
+        // 단일 객체 형태 처리 (MySQL OkPacket 등)
+        if (result && (typeof result.numDeletedRows === 'bigint' || typeof result.numDeletedRows === 'number')) {
+            const v = typeof result.numDeletedRows === 'bigint' ? Number(result.numDeletedRows) : result.numDeletedRows;
+            return { affectedRows: v };
+        }
+        if (result && (typeof result.affectedRows === 'bigint' || typeof result.affectedRows === 'number')) {
+            const v = typeof result.affectedRows === 'bigint' ? Number(result.affectedRows) : result.affectedRows;
+            return { affectedRows: v };
+        }
+
+        // 일부 드라이버는 행 배열을 직접 반환하기도 함
+        if (Array.isArray(result?.rows)) {
+            return { affectedRows: result.rows.length, rows: result.rows };
+        }
+
+        return { affectedRows: 0 };
+    }
+    
+    enforceAffectLimit(affected, limit) {
+        affected = isNumber(affected) ? Number(affected) : 0;
+        limit = isNumber(limit) ? Number(limit) : 0;
+        if (limit != null && affected > limit) {
+            throw new Error(`affectedRows ${affected} exceeds limit ${limit}.`);
+        }
+    }
+}
+
+function isObject(v) {
+    return v && typeof v === 'object' && !Array.isArray(v);
+}
+function isNumber(v) {
+    return (typeof v === 'number') || (typeof v === 'bigint');
 }
 
 export default SQLTable;

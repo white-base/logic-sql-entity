@@ -316,6 +316,233 @@ describe("[target: sql-table.js]", () => {
     
             table.db.destroy();
         })
+        describe('delete_() method tests', () => {
+            let table;
+            let conn;
+
+            beforeEach(async () => {
+                table = new SQLTable('test_person');
+                conn = {
+                    dialect: new SqliteDialect({
+                        database: new Database(':memory:')
+                    })
+                };
+                table.connect = conn;
+                await table.init();
+
+                // Setup columns
+                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
+                table.columns.add('name', { nullable: false });
+                table.columns.add('age', { nullable: false });
+
+                // Create table
+                await table.db.schema
+                    .createTable('test_person')
+                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+                    .addColumn('name', 'text', (col) => col.notNull())
+                    .addColumn('age', 'integer', (col) => col.notNull())
+                    .execute();
+
+                // Insert test data
+                await table.db.insertInto('test_person')
+                    .values([
+                        { name: '홍길동', age: 30 },
+                        { name: '김로직', age: 40 },
+                        { name: '이순신', age: 50 }
+                    ])
+                    .execute();
+            });
+
+            afterEach(async () => {
+                await table.db.destroy();
+            });
+
+            it('should throw error when no transaction provided and requireTrx=true', async () => {
+                const whereClause = { id: 1 };
+                const options = { requireTrx: true };
+
+                await expect(table.delete_(whereClause, options))
+                    .rejects.toThrow('delete requires an explicit transaction (requireTrx=true).');
+            });
+
+            it('should delete single row with transaction', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 1 };
+                    const options = { trx, maxDeletableRows: 1 };
+
+                    const result = await table.delete_(whereClause, options);
+                    
+                    expect(result.affectedRows).toBe(1);
+                    
+                    // Verify deletion
+                    const remaining = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(remaining.length).toBe(2);
+                    expect(remaining.find(r => r.id === 1)).toBeUndefined();
+                });
+            });
+
+            it('should return compiled SQL when dryRun=true', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 1 };
+                    const options = { trx, dryRun: true };
+
+                    const result = await table.delete_(whereClause, options);
+                    
+                    expect(result).toHaveProperty('sql');
+                    expect(result.sql).toContain('delete from');
+                    expect(result.sql).toContain('test_person');
+                    
+                    // Verify no actual deletion occurred
+                    const rows = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(rows.length).toBe(3);
+                });
+            });
+
+            it('should throw error when affected rows exceed maxDeletableRows', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    // Insert multiple rows with same condition to exceed limit
+                    await trx.insertInto('test_person')
+                        .values([
+                            { name: '테스트1', age: 25 },
+                            { name: '테스트2', age: 25 }
+                        ])
+                        .execute();
+
+                    const whereClause = { age: 25 };
+                    const options = { trx, maxDeletableRows: 1 };
+
+                    await expect(table.delete_(whereClause, options))
+                        .rejects.toThrow('affectedRows 2 exceeds limit 1');
+                });
+            });
+
+            it('should emit deleting and deleted events', async () => {
+                const deletingHandler = jest.fn();
+                const deletedHandler = jest.fn();
+                
+                table.onDeleting(deletingHandler);
+                table.onDeleted(deletedHandler);
+
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 1 };
+                    const options = { trx, maxDeletableRows: 1 };
+
+                    await table.delete_(whereClause, options);
+                    
+                    expect(deletingHandler).toHaveBeenCalledWith({
+                        table: table,
+                        db: trx,
+                        options: options
+                    });
+                    
+                    expect(deletedHandler).toHaveBeenCalledWith({
+                        table: table,
+                        db: trx,
+                        options: expect.objectContaining({
+                            trx,
+                            maxDeletableRows: 1,
+                            requireTrx: true
+                        })
+                    });
+                });
+            });
+
+            it('should emit deleteError event when error occurs', async () => {
+                const deleteErrorHandler = jest.fn();
+                table.onDeleteFailed(deleteErrorHandler);
+
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    // Force an error by providing invalid where clause
+                    const whereClause = {}; // No PK columns
+                    const options = { trx };
+
+                    await expect(table.delete_(whereClause, options))
+                        .rejects.toThrow();
+                    
+                    expect(deleteErrorHandler).toHaveBeenCalledWith({
+                        table: table,
+                        db: trx,
+                        options: expect.objectContaining({ trx }),
+                        error: expect.any(Error)
+                    });
+                });
+            });
+
+            it('should normalize delete result correctly', () => {
+                // Test array result
+                const arrayResult = [{ id: 1 }, { id: 2 }];
+                const normalized1 = table.normalizeDeleteResult(arrayResult);
+                expect(normalized1).toEqual({ affectedRows: 2, rows: arrayResult });
+
+                // Test numDeletedRows result
+                const numDeletedResult = { numDeletedRows: 3 };
+                const normalized2 = table.normalizeDeleteResult(numDeletedResult);
+                expect(normalized2).toEqual({ affectedRows: 3 });
+
+                // Test affectedRows result
+                const affectedRowsResult = { affectedRows: 1 };
+                const normalized3 = table.normalizeDeleteResult(affectedRowsResult);
+                expect(normalized3).toEqual({ affectedRows: 1 });
+
+                // Test fallback
+                const unknownResult = { someProperty: 'value' };
+                const normalized4 = table.normalizeDeleteResult(unknownResult);
+                expect(normalized4).toEqual({ affectedRows: 0 });
+            });
+
+            it('should enforce affect limit correctly', () => {
+                // Should not throw when within limit
+                expect(() => table.enforceAffectLimit(1, 5)).not.toThrow();
+                expect(() => table.enforceAffectLimit(5, 5)).not.toThrow();
+                
+                // Should throw when exceeding limit
+                expect(() => table.enforceAffectLimit(6, 5))
+                    .toThrow('affectedRows 6 exceeds limit 5');
+                
+                // Should handle null/undefined limits
+                expect(() => table.enforceAffectLimit(100, null)).not.toThrow();
+                expect(() => table.enforceAffectLimit(100, undefined)).not.toThrow();
+                
+                // Should handle non-numeric affected values
+                expect(() => table.enforceAffectLimit('invalid', 5)).not.toThrow();
+            });
+
+            it('should delete with MetaRow object', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    // Create a MetaRow-like object
+                    const metaRow = {
+                        id: 2,
+                        name: '김로직',
+                        age: 40
+                    };
+                    
+                    const options = { trx, maxDeletableRows: 1 };
+                    const result = await table.delete_(metaRow, options);
+                    
+                    expect(result.affectedRows).toBe(1);
+                    
+                    // Verify deletion
+                    const remaining = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(remaining.length).toBe(2);
+                    expect(remaining.find(r => r.id === 2)).toBeUndefined();
+                });
+            });
+
+            it('should handle default options correctly', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 3 };
+                    const options = { 
+                        trx, 
+                        requireTrx: false, // Override default
+                        maxDeletableRows: 10 // Override default
+                    };
+
+                    const result = await table.delete_(whereClause, options);
+                    
+                    expect(result.affectedRows).toBe(1);
+                });
+            });
+        });
     });
 });
 
