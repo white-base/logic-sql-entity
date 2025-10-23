@@ -204,6 +204,7 @@ class SQLTable extends MetaTable {
         return query;   // TODO: 위치 try 밖으로 빼기
     }
 
+    // TODO: 삭제 대기
     async $delete(p_where, trx) {
         let pkCount = 0; // PK 조건 개수 카운트
         const db = trx || this.db;
@@ -342,7 +343,7 @@ class SQLTable extends MetaTable {
             const stdType = col.dataType || 'text';
             const vendorType = col?.vendor?.[vendor]?.dataType || convertStandardToVendor(stdType, vendor).toLowerCase(); // 벤더 지정 우선, 없으면 변환   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
             // const vendorType = convertStandardToVendor(stdType, vendor).toLowerCase();                // 표준 → 벤더 타입   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
-            if (col.virual === true) continue; // 가상 컬럼 스킵
+            if (col.virtual === true) continue; // 가상 컬럼 스킵
 
             tb = tb.addColumn(name, vendorType, (c0) => {
                 let c = c0;
@@ -643,6 +644,7 @@ class SQLTable extends MetaTable {
         return result;
     }
 
+    // TODO: 삭제 대기
     async delete(p_where, trx) {
         const db = trx || this.db;
 
@@ -754,7 +756,103 @@ class SQLTable extends MetaTable {
     
         return data;
     }
-    
+
+    // ############################################
+    async insert(p_data, p_options) {
+        const db = p_options?.trx || this.db;
+
+        if (db && db.constructor && db.constructor.name === 'Kysely') {
+            await db.transaction().execute(async (trx) => {
+                return await this.$insert(p_data, { ...p_options, trx });
+            });
+        } else {
+            return await this.$insert(p_data, { ...p_options, trx: db });
+        }
+    }
+
+    insertBuilder(p_data, p_options) {
+        const db = p_options.trx || this.db;
+        const hasReturning = this.profile.features?.hasReturning || false;
+        let data = {};
+        let builder;
+        
+
+        data = this.$getColumns(p_data, 'data');
+
+        if (Object.keys(data).length === 0) throw new Error('insert: 삽입할 데이터가 없습니다.');
+
+        builder = db.insertInto(this.tableName)
+            .values({ ...data });
+
+        if (hasReturning) {
+            builder = builder.returningAll();
+        }
+        return builder;
+    }
+
+    async _insert(p_data, p_options) {
+        const db = p_options.trx;
+        const safe = { maxDeletableRows: 1, dryRun: false, ...p_options };
+
+        await this._event.emit('inserting', { table: this, db: db, options: p_options });
+
+        try {
+            const builder = this.insertBuilder(p_data, p_options);
+            if (safe.dryRun === true) {
+                await this._event.emit('inserted', { table: this, db: db, options: safe });
+                return builder.compile();
+            }
+
+            const result = await builder.executeTakeFirstOrThrow();
+            const normalized = this._normalizeInsertResult(result);
+
+            if (result.insertId > 0) {
+                const id = this.columns.find(c => c.primaryKey === true && c.autoIncrement === true)?.columnName;
+                builder2 = await this.$select({ where: { [id]: result.insertId }, page: 1, size: 1 });
+                result = await builder2.executeTakeFirst();
+            } else {
+                const where = {};
+                for (const [k, v] of this.columns.entries()) {
+                    if (v.primaryKey === true && p_row[v.columnName] !== undefined ) {
+                        where[v.columnName] = p_row[v.columnName];
+                    }
+                }
+                builder2 = await this.$select({ where: where, page: 1, size: 1 });
+                result = await builder2.executeTakeFirst();
+            }
+
+            this._enforceAffectLimit(normalized.affectedRows, safe.maxDeletableRows);
+            await this._event.emit('inserted', { table: this, db: db, options: safe });
+            
+            
+            return normalized;
+
+        } catch (error) {
+            await this._event.emit('insertFailed', { table: this, db: db, options: safe, error });
+            throw error;
+        }
+    }
+
+    _normalizeInsertResult(result) {
+        if (result.insertId && (typeof result.insertId === 'number' || typeof result.insertId === 'bigint')) {
+            return { affectedRows: 1, insertId: result.insertId };
+        }
+        return { affectedRows: 0, insertId: null };
+    }
+
+    // ###### 삭제 관련 메서드 ######################
+    async delete(p_where, p_options) {
+        const db = p_options?.trx || this.db;
+
+        if (db && db.constructor && db.constructor.name === 'Kysely') {
+            await db.transaction().execute(async (trx) => {
+                return await this._delete(p_where, { ...p_options, trx });
+            });
+        } else {
+            return await this._delete(p_where, { ...p_options, trx: db });
+        }
+    }
+
     deleteBuilder(p_where, p_options) {
         const db = p_options.trx || this.db;
         let pk = {};
@@ -764,7 +862,7 @@ class SQLTable extends MetaTable {
         else if (isObject(p_where)) pk = this.$getColumns(p_where, 'data');
         else throw new Error('Invalid row type');
 
-        if (pk.length === 0) throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
+        if (Object.keys(pk).length === 0) throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
         
         builder = db.deleteFrom(this.tableName);
         for (const k in pk) {
@@ -778,47 +876,38 @@ class SQLTable extends MetaTable {
             }
             builder = builder.where(k, '=', value);
         }
-
-        // pk.forEach((v, k) => {
-        //     builder = builder ? builder.where(k, '=', v) : db.deleteFrom(this._name).where(k, '=', v);
-        // });
-
-        // const builder = db.deleteFrom(this._name).where(pk);
         return builder;
     }
 
-    async delete_(p_where, p_options) {
-        const db   = p_options.trx || this.db;
-        const safe = { requireTrx: true, maxDeletableRows: 1, ...p_options };
-        const dryRun = safe.dryRun === true ? true : false;
-
-        if (safe.requireTrx && !p_options.trx) {
-            throw new Error('delete requires an explicit transaction (requireTrx=true).');
-        }
+    async _delete(p_where, p_options) {
+        const db = p_options.trx;
+        const safe = { maxDeletableRows: 1, dryRun: false, ...p_options };
 
         await this._event.emit('deleting', { table: this, db: db, options: p_options });
 
         try {
             const builder = this.deleteBuilder(p_where, p_options);
-            if (dryRun) {
+            if (safe.dryRun === true) {
                 await this._event.emit('deleted', { table: this, db: db, options: safe });
                 return builder.compile();
             }
 
             const result = await builder.execute();
-            const normalized = this.normalizeDeleteResult(result);
+            const normalized = this._normalizeDeleteResult(result);
 
-            this.enforceAffectLimit(normalized.affectedRows, safe.maxDeletableRows);
+            this._enforceAffectLimit(normalized.affectedRows, safe.maxDeletableRows);
             await this._event.emit('deleted', { table: this, db: db, options: safe });
             return normalized;
 
         } catch (error) {
-            await this._event.emit('deleteError', { table: this, db: db, options: safe, error });
+            await this._event.emit('deleteFailed', { table: this, db: db, options: safe, error });
             throw error;
         }
     }
 
-    normalizeDeleteResult(result) {
+    
+
+    _normalizeDeleteResult(result) {
         // 배열인 경우: 여러 드라이버/트랜잭션 반환 형태 처리
         if (Array.isArray(result)) {
             if (result.length === 0) {
@@ -828,12 +917,21 @@ class SQLTable extends MetaTable {
 
             // 첫 요소가 DeleteResult/OkPacket 형태인지 확인
             const candidate = first && typeof first === 'object'
-                ? (first.numDeletedRows ?? first.affectedRows ?? first.affected_rows ?? null)
+                ? (
+                    first.numDeletedRows ??
+                    first.affectedRows ??
+                    first.affected_rows ??
+                    first.changes ??
+                    first.rowCount ??
+                    first.count ??
+                    first.numAffectedRows ??
+                    null
+                )
                 : null;
 
             if (candidate != null) {
                 // bigint일 수 있으므로 숫자로 변환
-                const affected = typeof candidate === 'bigint' ? Number(candidate) : Number(candidate);
+                const affected = Number(candidate);
                 return { affectedRows: isNaN(affected) ? 0 : affected, rows: result };
             }
 
@@ -842,13 +940,21 @@ class SQLTable extends MetaTable {
         }
 
         // 단일 객체 형태 처리 (MySQL OkPacket 등)
-        if (result && (typeof result.numDeletedRows === 'bigint' || typeof result.numDeletedRows === 'number')) {
-            const v = typeof result.numDeletedRows === 'bigint' ? Number(result.numDeletedRows) : result.numDeletedRows;
-            return { affectedRows: v };
-        }
-        if (result && (typeof result.affectedRows === 'bigint' || typeof result.affectedRows === 'number')) {
-            const v = typeof result.affectedRows === 'bigint' ? Number(result.affectedRows) : result.affectedRows;
-            return { affectedRows: v };
+        const scalarKeys = [
+            'numDeletedRows',
+            'affectedRows',
+            'affected_rows',
+            'changes',
+            'rowCount',
+            'count',
+            'numAffectedRows'
+        ];
+        for (const key of scalarKeys) {
+            const value = result?.[key];
+            if (value == null) continue;
+            if (!isNumber(value) && typeof value !== 'string') continue;
+            const v = Number(value);
+            return { affectedRows: isNaN(v) ? 0 : v };
         }
 
         // 일부 드라이버는 행 배열을 직접 반환하기도 함
@@ -859,10 +965,12 @@ class SQLTable extends MetaTable {
         return { affectedRows: 0 };
     }
     
-    enforceAffectLimit(affected, limit) {
+    _enforceAffectLimit(affected, limit) {
         affected = isNumber(affected) ? Number(affected) : 0;
-        limit = isNumber(limit) ? Number(limit) : 0;
-        if (limit != null && affected > limit) {
+        if (limit == null) return;
+        if (!isNumber(limit)) return;
+        limit = Number(limit);
+        if (affected > limit) {
             throw new Error(`affectedRows ${affected} exceeds limit ${limit}.`);
         }
     }
