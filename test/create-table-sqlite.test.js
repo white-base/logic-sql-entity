@@ -189,4 +189,106 @@ describe("[target: create-table-test.js]", () => {
         expectType('amount', 'numeric(12,2)', 'NUMERIC');
         expectType('created_at', 'timestamp', 'NUMERIC');
     });
+    
+    describe("데이터 삽입 테스트", () => {
+        it("users 테이블에 데이터를 삽입할 수 있어야 한다", async () => {
+            const userData = {
+                email: 'test@example.com',
+                name: 'Test User',
+                bigint_col: 123456789,
+                numeric_col: 99.99,
+                double_col: 3.14159,
+                boolean_col: 1,
+                // text_col: 'Sample text',
+                // char_col: 'CHAR10',
+                // date_col: new Date('2023-01-01'),
+                // time_col: '14:30:00',
+                // timestamp_col: new Date(),
+                // json_col: { key: 'value' },
+                // uuid_col: '550e8400-e29b-41d4-a716-446655440000',
+                // bytes_col: Buffer.from('binary data'),
+                // blob_col: Buffer.from('blob data')
+            };
+
+            const result = await users.insert(userData);
+            expect(result).toBeDefined();
+            // expect(result.insertId).toBeDefined();
+        });
+
+        it.skip("orders 테이블에 데이터를 삽입할 수 있어야 한다", async () => {
+            const orderData = {
+                user_id: 1,
+                amount: 299.99
+            };
+
+            const result = await orders.insert(orderData);
+            expect(result).toBeDefined();
+            // expect(result.insertId).toBeDefined();
+        });
+
+        it("여러 레코드를 한 번에 삽입할 수 있어야 한다", async () => {
+            const usersData = [
+                { email: 'user1@example.com', name: 'User One' },
+                { email: 'user2@example.com', name: 'User Two' },
+                { email: 'user3@example.com', name: 'User Three' }
+            ];
+
+            const result = await users.insert(usersData);
+            expect(result).toBeDefined();
+            expect(result.length).toBe(3);
+        });
+
+        it("필수 필드가 누락된 경우 에러가 발생해야 한다", async () => {
+            const invalidData = {
+                name: 'No Email User'
+                // email 필드 누락 (nullable: false)
+            };
+
+            await expect(users.insert(invalidData)).rejects.toThrow();
+        });
+
+        it("unique 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
+            const duplicateEmailData = {
+                email: 'test@example.com', // 이미 존재하는 이메일
+                name: 'Duplicate Email User'
+            };
+
+            await expect(users.insert(duplicateEmailData)).rejects.toThrow();
+        });
+
+        it("외래키 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
+            const invalidOrderData = {
+                user_id: 999, // 존재하지 않는 user_id
+                amount: 100.00
+            };
+
+            await expect(orders.insert(invalidOrderData)).rejects.toThrow();
+        });
+
+        it("defaultValue가 적용되어야 한다", async () => {
+            const userData = {
+                email: 'default@example.com',
+                name: 'Default Test User'
+                // created_at은 defaultValue: { kind: 'now' }로 설정됨
+            };
+
+            const result = await users.insert(userData);
+            expect(result).toBeDefined();
+
+            // 삽입된 데이터 확인
+            const db = users.db;
+            const { rows } = await sql`SELECT created_at FROM users WHERE id = ${result.id}`.execute(db);
+            expect(rows[0].created_at).toBeDefined();
+        });
+
+        it("autoIncrement가 동작해야 한다", async () => {
+            const userData1 = { email: 'auto1@example.com', name: 'Auto User 1' };
+            const userData2 = { email: 'auto2@example.com', name: 'Auto User 2' };
+
+            const result1 = await users.insert(userData1);
+            const result2 = await users.insert(userData2);
+
+            expect(result2.id).toBeGreaterThan(result1.id);
+        });
+    });
 });

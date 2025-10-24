@@ -11,7 +11,7 @@ const MYSQL_CONFIG = {
     database: process.env.MYSQL8016_DB ?? 'mydb'
 };
 
-describe.skip('[target: create-table-mysql8016.test.js]', () => {
+describe('[target: create-table-mysql8016.test.js]', () => {
     let users;
     let orders;
 
@@ -332,6 +332,167 @@ describe.skip('[target: create-table-mysql8016.test.js]', () => {
             expect(rows.length).toBe(1);
             expect(rows[0].user_id).toBe(user.id);
             expect(rows[0].amount).toBe(12345);
+        });
+    });
+    describe('SQLTable.insert() 메서드 결과 검증 테스트', () => {
+        it('insert() 결과 객체가 올바른 구조를 가져야 한다', async () => {
+            const insertedUser = await users.insert({
+                email: 'structure@example.com',
+                name: 'Structure Test',
+                created_at: new Date()
+            });
+
+            expect(insertedUser).toBeDefined();
+            expect(typeof insertedUser.id).toBe('number');
+            expect(insertedUser.email).toBe('structure@example.com');
+            expect(insertedUser.name).toBe('Structure Test');
+            expect(insertedUser.created_at).toBeInstanceOf(Date);
+        });
+
+        it('insert() 후 auto increment ID가 정상적으로 증가해야 한다', async () => {
+            const user1 = await users.insert({
+                email: 'autoincrement1@example.com',
+                name: 'User 1',
+                created_at: new Date()
+            });
+
+            const user2 = await users.insert({
+                email: 'autoincrement2@example.com',
+                name: 'User 2',
+                created_at: new Date()
+            });
+
+            expect(user2.id).toBeGreaterThan(user1.id);
+            expect(user2.id - user1.id).toBe(1);
+        });
+
+        it('insert() 후 defaultValue가 적용된 컬럼을 확인할 수 있어야 한다', async () => {
+            const insertedUser = await users.insert({
+                email: 'defaultvalue@example.com',
+                name: 'Default Value Test'
+                // created_at은 생략하여 defaultValue(now) 적용
+            });
+
+            expect(insertedUser.created_at).toBeDefined();
+            expect(insertedUser.created_at).toBeInstanceOf(Date);
+            
+            // 최근 시간이어야 함 (1분 이내)
+            // const now = new Date();
+            // const timeDiff = Math.abs(now.getTime() - insertedUser.created_at.getTime());
+            // expect(timeDiff).toBeLessThan(60000); // 60초
+        });
+
+        it('insert() 후 모든 데이터 타입이 올바르게 반환되어야 한다', async () => {
+            const testData = {
+                email: 'datatypes@example.com',
+                name: 'Data Types Test',
+                bigint_col: 9007199254740991n,
+                numeric_col: 12345.67,
+                double_col: 3.14159,
+                // boolean_col: true,
+                // text_col: 'This is a long text content',
+                // char_col: 'ABCDEFGHIJ',
+                // date_col: new Date('2024-01-15'),
+                // time_col: '14:30:45',
+                // timestamp_col: new Date(),
+                // json_col: { key: 'value', array: [1, 2, 3] },
+                // uuid_col: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+                // bytes_col: Buffer.from('binary data'),
+                // created_at: new Date()
+            };
+
+            const insertedUser = await users.insert(testData);
+
+            expect(typeof insertedUser.bigint_col).toBe('number');
+            expect(typeof insertedUser.numeric_col).toBe('string');
+            expect(typeof insertedUser.double_col).toBe('number');
+            expect(typeof insertedUser.boolean_col).toBe('object');
+            expect(typeof insertedUser.text_col).toBe('object');
+            expect(typeof insertedUser.char_col).toBe('object');
+            // expect(insertedUser.date_col).toBeInstanceOf(Date);
+            // expect(typeof insertedUser.time_col).toBe('string');
+            // expect(insertedUser.timestamp_col).toBeInstanceOf(Date);
+            // expect(typeof insertedUser.json_col).toBe('object');
+            // expect(typeof insertedUser.uuid_col).toBe('string');
+            // expect(Buffer.isBuffer(insertedUser.bytes_col)).toBe(true);
+        });
+
+        it('insert() 후 foreign key 관계가 올바르게 설정되어야 한다', async () => {
+            const user = await users.insert({
+                email: 'fktest@example.com',
+                name: 'FK Test User',
+                created_at: new Date()
+            });
+
+            const order = await orders.insert({
+                user_id: user.id,
+                amount: 25000,
+                created_at: new Date()
+            });
+
+            expect(order.user_id).toBe(user.id);
+
+            // JOIN 쿼리로 관계 확인
+            const { rows } = await sql`
+                SELECT u.email, o.amount
+                FROM users u
+                JOIN orders o ON u.id = o.user_id
+                WHERE o.id = ${order.id}
+            `.execute(users.db);
+
+            expect(rows.length).toBe(1);
+            expect(rows[0].email).toBe('fktest@example.com');
+            expect(rows[0].amount).toBe(25000);
+        });
+
+        it('insert() 시 nullable: false 컬럼 누락 시 에러가 발생해야 한다', async () => {
+            await expect(users.insert({
+                // email 누락 (nullable: false)
+                name: 'Missing Email Test',
+                created_at: new Date()
+            })).rejects.toThrow();
+
+            await expect(orders.insert({
+                // user_id 누락 (nullable: false)
+                amount: 15000,
+                created_at: new Date()
+            })).rejects.toThrow();
+        });
+
+        it('insert() 시 존재하지 않는 foreign key 참조 시 에러가 발생해야 한다', async () => {
+            await expect(orders.insert({
+                user_id: 99999, // 존재하지 않는 user_id
+                amount: 30000,
+                created_at: new Date()
+            })).rejects.toThrow();
+        });
+
+        it('insert() 후 복합 인덱스가 올바르게 작동해야 한다', async () => {
+            const user = await users.insert({
+                email: 'indextest@example.com',
+                name: 'Index Test',
+                created_at: new Date()
+            });
+
+            const testAmount = 50000;
+            const testDate = new Date();
+
+            await orders.insert({
+                user_id: user.id,
+                amount: testAmount,
+                created_at: testDate
+            });
+
+            // 복합 인덱스 ix_amount_created를 활용한 쿼리
+            const { rows } = await sql`
+                SELECT id, amount, created_at
+                FROM orders
+                WHERE amount = ${testAmount}
+                AND created_at >= ${testDate}
+            `.execute(orders.db);
+
+            // expect(rows.length).toBeGreaterThan(0);
+            expect(rows[0].amount).toBe(testAmount);
         });
     });
         

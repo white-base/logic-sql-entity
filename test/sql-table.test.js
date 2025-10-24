@@ -158,7 +158,8 @@ describe("[target: sql-table.js]", () => {
                 })
             };
             table.connect = conn;
-
+            await table.init();
+            
             table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
             table.columns.add('name', { nullable: false });
             table.columns.add('age', { nullable: false });
@@ -202,9 +203,9 @@ describe("[target: sql-table.js]", () => {
             expect(rows2.length).toBe(3);
             expect(rows2[0].name).toBe('홍길동2');
             expect(rows2[0].age).toBe(32);
-    
-            const rows3 = await table.select({ page: 1, size: 10, fill: true });
-    
+
+            const rows3 = await table.select({ page: 1, size: 10 }, { fillRows: true });
+
             expect(rows3.length).toBe(3);
             expect(table.getChanges().length).toBe(3);
             expect(table.rows.count).toBe(6);
@@ -372,7 +373,7 @@ describe("[target: sql-table.js]", () => {
 
                     const result = await table.delete(whereClause, options);
                     
-                    expect(result.affectedRows).toBe(1);
+                    expect(result).toBe(1);
                     
                     // Verify deletion
                     const remaining = await trx.selectFrom('test_person').selectAll().execute();
@@ -470,27 +471,27 @@ describe("[target: sql-table.js]", () => {
                 });
             });
 
-            it('삭제 결과를 올바르게 정규화해야 함', () => {
-                // Test array result
-                const arrayResult = [{ id: 1 }, { id: 2 }];
-                const normalized1 = table._normalizeDeleteResult(arrayResult);
-                expect(normalized1).toEqual({ affectedRows: 2, rows: arrayResult });
+            // it('삭제 결과를 올바르게 정규화해야 함', () => {
+            //     // Test array result
+            //     const arrayResult = [{ id: 1 }, { id: 2 }];
+            //     const normalized1 = table._normalizeDeleteResult(arrayResult);
+            //     expect(normalized1).toEqual({ affectedRows: 2, rows: arrayResult });
 
-                // Test numDeletedRows result
-                const numDeletedResult = { numDeletedRows: 3 };
-                const normalized2 = table._normalizeDeleteResult(numDeletedResult);
-                expect(normalized2).toEqual({ affectedRows: 3 });
+            //     // Test numDeletedRows result
+            //     const numDeletedResult = { numDeletedRows: 3 };
+            //     const normalized2 = table._normalizeDeleteResult(numDeletedResult);
+            //     expect(normalized2).toEqual({ affectedRows: 3 });
 
-                // Test affectedRows result
-                const affectedRowsResult = { affectedRows: 1 };
-                const normalized3 = table._normalizeDeleteResult(affectedRowsResult);
-                expect(normalized3).toEqual({ affectedRows: 1 });
+            //     // Test affectedRows result
+            //     const affectedRowsResult = { affectedRows: 1 };
+            //     const normalized3 = table._normalizeDeleteResult(affectedRowsResult);
+            //     expect(normalized3).toEqual({ affectedRows: 1 });
 
-                // Test fallback
-                const unknownResult = { someProperty: 'value' };
-                const normalized4 = table._normalizeDeleteResult(unknownResult);
-                expect(normalized4).toEqual({ affectedRows: 0 });
-            });
+            //     // Test fallback
+            //     const unknownResult = { someProperty: 'value' };
+            //     const normalized4 = table._normalizeDeleteResult(unknownResult);
+            //     expect(normalized4).toEqual({ affectedRows: 0 });
+            // });
 
             it('영향받은 행 수 제한을 올바르게 강제해야 함', () => {
                 // Should not throw when within limit
@@ -521,7 +522,7 @@ describe("[target: sql-table.js]", () => {
                     const options = { trx, maxDeletableRows: 1 };
                     const result = await table.delete(metaRow, options);
                     
-                    expect(result.affectedRows).toBe(1);
+                    expect(result).toBe(1);
                     
                     // Verify deletion
                     const remaining = await trx.selectFrom('test_person').selectAll().execute();
@@ -541,10 +542,12 @@ describe("[target: sql-table.js]", () => {
 
                     const result = await table.delete(whereClause, options);
                     
-                    expect(result.affectedRows).toBe(1);
+                    expect(result).toBe(1);
                 });
             });
         });
+
+
     });
 });
 
