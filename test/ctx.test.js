@@ -1,4 +1,7 @@
 // import { jest } from '@jest/globals';
+import { expect, jest }     from '@jest/globals';
+import {MetaRegistry} from 'logic-entity';
+
 import { SqliteDialect, sql } from 'kysely'
 import Database from 'better-sqlite3'
 import { ctx_v1 } from './module/ctx_v1/index.js';
@@ -6,9 +9,14 @@ import { ctx_v1 } from './module/ctx_v1/index.js';
 //==============================================================
 // test
 describe("[target: ctx.js]", () => {
-    let dbFile = 'mydb-ctx-test.sqlite';
+    // let dbFile = 'mydb-ctx-test.sqlite';
+    let dbFile = ':memory:';
+
 
     beforeAll(async () => {
+        jest.resetModules();
+        MetaRegistry.init();
+
         ctx_v1.connect = {
             dialect: new SqliteDialect({
                 database: new Database(dbFile)
@@ -36,6 +44,10 @@ describe("[target: ctx.js]", () => {
         await sql`DROP TABLE IF EXISTS meb_master`.execute(db);
 
         await ctx_v1.createSchema();
+    });
+    afterAll(async () => {
+        const db = ctx_v1.db;
+        await db.destroy();
     });
 
     describe("SQLRowCollection :: 클래스", () => {

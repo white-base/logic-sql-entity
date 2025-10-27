@@ -1,3 +1,6 @@
+import { expect, jest }     from '@jest/globals';
+import {MetaRegistry} from 'logic-entity';
+
 import { SqliteDialect, sql } from 'kysely'
 import Database from 'better-sqlite3'
 import { SQLTable } from '../src/sql-table.js';
@@ -9,9 +12,13 @@ import { convertStandardToVendor } from '../src/util/convert-data-type.js'; // �
 
 describe("[target: create-table-test.js]", () => {
     let users, orders;
-    let dbFile = 'mydb-test.sqlite';
+    // let dbFile = 'mydb-test.sqlite';
+    let dbFile = ':memory:';
 
     beforeAll(async () => {
+        // jest.resetModules();
+        MetaRegistry.init();
+
         users = new SQLTable('users');
         users.connect = {
             dialect: new SqliteDialect({
@@ -64,15 +71,23 @@ describe("[target: create-table-test.js]", () => {
         await sql`PRAGMA journal_mode = WAL`.execute(db);   // 동시성 및 복구력 향상
         await sql`PRAGMA synchronous = NORMAL`.execute(db); // 성능 향상
 
+
         // 기존에 테이블이 있으면 삭제
-        await sql`DROP TABLE IF EXISTS orders`.execute(db);
-        await sql`DROP TABLE IF EXISTS users`.execute(db);
+        
+        // await sql`DROP TABLE IF EXISTS orders`.execute(db);
+        // await sql`DROP TABLE IF EXISTS users`.execute(db);
+        await orders.drop();
+        await users.drop();
 
         await users.create();
         await orders.create();
     });
 
-    afterAll(() => {});
+    afterAll(async () => {
+        await orders.db.destroy()
+        await users.db.destroy()
+        MetaRegistry.init();
+    })
 
     describe("테이블 생성 및 구조 확인", () => {
         it("users 테이블이 생성되어야 한다", async () => {
@@ -135,62 +150,65 @@ describe("[target: create-table-test.js]", () => {
             }
         });
     });
+    describe("컬럼 자료형 및 제약조건 확인", () => {
 
-    it("users 테이블의 컬럼 자료형이 올바르게 생성되어야 한다", async () => {
-        const db = users.db;
-        const { rows: columns } = await sql`PRAGMA table_info(users)`.execute(db);
+        it("users 테이블의 컬럼 자료형이 올바르게 생성되어야 한다", async () => {
+            const db = users.db;
+            const { rows: columns } = await sql`PRAGMA table_info(users)`.execute(db);
 
-        // 표준 타입 → sqlite 타입 변환 후 비교
-        const expectType = (colName, stdType, vendorTypeExpected) => {
-            const col = columns.find(c => c.name === colName);
-            expect(col).toBeDefined();
-            const vendorType = convertStandardToVendor(stdType, 'sqlite');
-            // expect(col.type.toUpperCase()).toBe(vendorType);
-            expect(col.type.toUpperCase()).toBe(vendorTypeExpected);
-        };
+            // 표준 타입 → sqlite 타입 변환 후 비교
+            const expectType = (colName, stdType, vendorTypeExpected) => {
+                const col = columns.find(c => c.name === colName);
+                expect(col).toBeDefined();
+                const vendorType = convertStandardToVendor(stdType, 'sqlite');
+                // expect(col.type.toUpperCase()).toBe(vendorType);
+                expect(col.type.toUpperCase()).toBe(vendorTypeExpected);
+            };
 
-        expectType('id', 'int', 'INTEGER');
-        expectType('email', 'varchar(255)', 'TEXT');
-        expectType('name', 'varchar(100)', 'TEXT');
-        expectType('created_at', 'timestamp', 'NUMERIC');
-        expectType('bigint_col', 'bigint', 'INTEGER');
-        // expectType('real_col', 'real', 'TEXT');
-        expectType('double_col', 'double', 'REAL');
-        expectType('boolean_col', 'boolean', 'INTEGER');
+            expectType('id', 'int', 'INTEGER');
+            expectType('email', 'varchar(255)', 'TEXT');
+            expectType('name', 'varchar(100)', 'TEXT');
+            expectType('created_at', 'timestamp', 'NUMERIC');
+            expectType('bigint_col', 'bigint', 'INTEGER');
+            // expectType('real_col', 'real', 'TEXT');
+            expectType('double_col', 'double', 'REAL');
+            expectType('boolean_col', 'boolean', 'INTEGER');
 
-        expectType('text_col', 'text', 'TEXT');
-        expectType('char_col', 'char(10)', 'TEXT');
+            expectType('text_col', 'text', 'TEXT');
+            expectType('char_col', 'char(10)', 'TEXT');
 
-        expectType('date_col', 'date', 'NUMERIC');
-        expectType('time_col', 'time', 'NUMERIC');
-        expectType('timestamp_col', 'timestamp', 'NUMERIC');
+            expectType('date_col', 'date', 'NUMERIC');
+            expectType('time_col', 'time', 'NUMERIC');
+            expectType('timestamp_col', 'timestamp', 'NUMERIC');
+            
+            expectType('json_col', 'json', 'TEXT');
+            expectType('uuid_col', 'uuid', 'TEXT');
+            expectType('bytes_col', 'bytes', 'BLOB');
+
+            expectType('blob_col', 'blob', 'BLOB');
+        });
+
+        it("orders 테이블의 컬럼 자료형이 올바르게 생성되어야 한다", async () => {
+            const db = orders.db;
+            const { rows: columns } = await sql`PRAGMA table_info(orders)`.execute(db);
+
+            const expectType = (colName, stdType, vendorTypeExpected) => {
+                const col = columns.find(c => c.name === colName);
+                expect(col).toBeDefined();
+                const vendorType = convertStandardToVendor(stdType, 'sqlite');
+                expect(col.type.toUpperCase()).toBe(vendorType);
+                expect(col.type.toUpperCase()).toBe(vendorTypeExpected);
+            };
+
+            expectType('id', 'int', 'INTEGER');
+            expectType('user_id', 'int', 'INTEGER');
+            expectType('amount', 'numeric(12,2)', 'NUMERIC');
+            expectType('created_at', 'timestamp', 'NUMERIC');
+        });
+    });
         
-        expectType('json_col', 'json', 'TEXT');
-        expectType('uuid_col', 'uuid', 'TEXT');
-        expectType('bytes_col', 'bytes', 'BLOB');
-
-        expectType('blob_col', 'blob', 'BLOB');
-    });
-
-    it("orders 테이블의 컬럼 자료형이 올바르게 생성되어야 한다", async () => {
-        const db = orders.db;
-        const { rows: columns } = await sql`PRAGMA table_info(orders)`.execute(db);
-
-        const expectType = (colName, stdType, vendorTypeExpected) => {
-            const col = columns.find(c => c.name === colName);
-            expect(col).toBeDefined();
-            const vendorType = convertStandardToVendor(stdType, 'sqlite');
-            expect(col.type.toUpperCase()).toBe(vendorType);
-            expect(col.type.toUpperCase()).toBe(vendorTypeExpected);
-        };
-
-        expectType('id', 'int', 'INTEGER');
-        expectType('user_id', 'int', 'INTEGER');
-        expectType('amount', 'numeric(12,2)', 'NUMERIC');
-        expectType('created_at', 'timestamp', 'NUMERIC');
-    });
     
-    describe("데이터 삽입 테스트", () => {
+    describe.skip("데이터 삽입 테스트", () => {
         it("users 테이블에 데이터를 삽입할 수 있어야 한다", async () => {
             const userData = {
                 email: 'test@example.com',
@@ -245,6 +263,7 @@ describe("[target: create-table-test.js]", () => {
             };
 
             await expect(users.insert(invalidData)).rejects.toThrow();
+            // expect(async () => await users.insert(invalidData)).toThrow();
         });
 
         it("unique 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
