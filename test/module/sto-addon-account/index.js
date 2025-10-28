@@ -71,5 +71,18 @@ ctxStoAccount.tables['sto_account'].columns.add('del_yn', {
     defaultValue: 'N'
 });
 
+ctxStoAccount.tables['sto_account'].create = async function(p_options) {
+    // POINT: 부모 클래스의 create 메서드 호출
+    
+    const parentCreate = Object.getPrototypeOf(this).create;
+    // const parentCreate = this.__proto__.create;
+    if (typeof parentCreate === 'function') {
+        const result = await parentCreate.call(this, p_options);
+        console.log('override create method in sto_account table');
+        return result;
+    }
+    throw new Error('Parent create method not found');
+};
+
 export default ctxStoAccount;
 export { ctxStoAccount };

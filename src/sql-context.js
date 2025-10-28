@@ -92,11 +92,25 @@ class SQLContext extends MetaElement {
         this._profile = p;
     }
 
-    async init() {
-        const info = await detectAndStoreDbInfo(this);
-        this.profile.vendor = info.kind;
-        this.profile.version = info.version;
-        this.profile.features = await resolveDbFeatures(info.kind, info.version);
+    async init(p_info) {
+        if (!p_info) p_info = await detectAndStoreDbInfo(this);
+
+        this.profile.vendor = p_info.kind;
+        this.profile.version = p_info.version;
+        this.profile.features = await resolveDbFeatures(p_info.kind, p_info.version);
+
+        for (let i = 0; i < this.contexts.length; i++) {
+            const ctx = this.contexts[i];
+            ctx.connect = ctx.connect || this.connect;
+            await ctx.init(p_info);
+        }
+
+        for (let j = 0; j < this.tables.length; j++) {
+            const tbl = this.tables[j];
+            tbl.connect = tbl.connect || this.connect;
+            // tbl.profile = tbl.profile || this.profile;
+            await tbl.init(p_info);
+        }
     }
 
     async validateDefinition(dbOrConn = null) {
@@ -350,14 +364,14 @@ class SQLContext extends MetaElement {
 
         for (let i = 0; i < createList.length; i++) {
             const ctx = createList[i];
-            ctx.connect = ctx.connect || this.connect;
-            ctx.profile = ctx.profile || this.profile;
+            // ctx.connect = ctx.connect || this.connect;
+            // ctx.profile = ctx.profile || this.profile;
 
             for (let j = 0; j < ctx.tables.length; j++) {
                 const tbl = ctx.tables[j];
-                tbl.connect = tbl.connect || this.connect;
-                tbl.profile = tbl.profile || this.profile;
-                await tbl.create(trx);
+                // tbl.connect = tbl.connect || this.connect;
+                // tbl.profile = tbl.profile || this.profile;
+                await tbl.create({ trx });
             }
         }
     }
@@ -385,13 +399,13 @@ class SQLContext extends MetaElement {
         const dropList = createList.reverse();
         for (let i = 0; i < dropList.length; i++) {
             const ctx = dropList[i];
-            ctx.connect = ctx.connect || this.connect;
-            ctx.profile = ctx.profile || this.profile;
+            // ctx.connect = ctx.connect || this.connect;
+            // ctx.profile = ctx.profile || this.profile;
 
             for (let k =  ctx.tables.length - 1; k >= 0; k--) {
                 const tbl = ctx.tables[k];
-                tbl.connect = tbl.connect || this.connect;
-                tbl.profile = tbl.profile || this.profile;
+                // tbl.connect = tbl.connect || this.connect;
+                // tbl.profile = tbl.profile || this.profile;
                 await tbl.drop(trx);
             }
         }

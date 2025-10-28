@@ -59,6 +59,8 @@ describe("[target: create-table-test.js]", () => {
 
         orders = new SQLTable('orders');
         orders.connect = users.connect;
+        await orders.init();
+
         orders.columns.add('id',       { dataType: 'int', primaryKey: true, autoIncrement: true, nullable: false });
         orders.columns.add('user_id',  { dataType: 'int', nullable: false,
             references: { target: 'users.id', group: 'fk_user', onDelete: 'CASCADE', onUpdate: 'CASCADE' },

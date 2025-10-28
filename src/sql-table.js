@@ -18,9 +18,11 @@ import { detectAndStoreDbInfo, getDbInfo } from './util/db-info.js';
 import { resolveDbFeatures }            from './util/db-features.js';
 
 // local funciton
-function _isObject(obj) {    // 객체 여부
-    if (typeof obj === 'object' && obj !== null) return true;
-    return false;
+function isObject(v) {
+    return v && typeof v === 'object' && !Array.isArray(v);
+}
+function isNumber(v) {
+    return (typeof v === 'number') || (typeof v === 'bigint');
 }
 
 class SQLTable extends MetaTable {
@@ -43,6 +45,8 @@ class SQLTable extends MetaTable {
 
     set connect(p_connect) {
         this._connect = p_connect;
+        // this._db = null; // 재생성 유도
+        // POINT: connect 변경 시 db 재생성 유도, 오류 발행함 
     }
 
     get db() {
@@ -63,429 +67,64 @@ class SQLTable extends MetaTable {
     onCreating(handler) {
         return this._event.on('creating', handler);
     }
-
     onCreated(handler) {
         return this._event.on('created', handler);
+    }
+    onCreatedFailed(handler) {
+        return this._event.on('createFailed', handler);
     }
 
     onDropping(handler) {
         return this._event.on('dropping', handler);
     }
-
     onDropped(handler) {
         return this._event.on('dropped', handler);
+    }
+    onDropFailed(handler) {
+        return this._event.on('dropFailed', handler);
     }
 
     onInserting(handler) {
         return this._event.on('inserting', handler);
     }
-
     onInserted(handler) {
         return this._event.on('inserted', handler);
+    }
+    onInsertFailed(handler) {
+        return this._event.on('insertFailed', handler);
     }
 
     onSelecting(handler) {
         return this._event.on('selecting', handler);
     }
-
     onSelected(handler) {
         return this._event.on('selected', handler);
+    }
+    onSelectFailed(handler) {
+        return this._event.on('selectFailed', handler);
     }
 
     onUpdating(handler) {
         return this._event.on('updating', handler);
     }
-
     onUpdated(handler) {
         return this._event.on('updated', handler);
+    }
+    onUpdateFailed(handler) {
+        return this._event.on('updateFailed', handler);
     }
 
     onDeleting(handler) {
         return this._event.on('deleting', handler);
     }
-
     onDeleted(handler) {
         return this._event.on('deleted', handler);
     }
-
     onDeleteFailed(handler) {
         return this._event.on('deleteFailed', handler);
     }
 
-    async $create(trx) {
-        const builders = [];
-
-        builders.push(await this._createStage1(trx));    
-        builders.push(...await this._createStage2_FKs(trx));
-        builders.push(...await this._createStage3_Indexes(trx));
-        return builders;
-    }
-
-    $drop(trx) {
-        const db = trx || this.db;
-        const builder = db.schema.dropTable(this.tableName).ifExists();
-        // 실행은 drop에서, 여기서는 builder만 리턴
-        return builder;
-    }
-
-    async init() {
-        const info = await detectAndStoreDbInfo(this);
-        this.profile.vendor = info.kind;
-        this.profile.version = info.version;
-        this.profile.features = resolveDbFeatures(info.kind, info.version);
-    }
-
-    getPrimaryKeyColumns() {
-        return this.columns.filter(c => c.primaryKey && !c.virtual).map(c => c.columnName);
-    }
-
-    async create(trx) {
-        const db = trx || this.db;
-
-        // pre-create event   TODO: 파라메터 정리 필요
-        await this._event.emit('creating', { table: this, db: db });
-
-        const builders = await this.$create(db);
-        for (const b of builders) {
-            await b.execute();
-        }
-        // post-create event
-        await this._event.emit('created', { table: this, db: db });
-    }
-
-    // ############################################
-    /* ============================================================
-    * 3-Stage DDL: Stage1 → Stage2 → Stage3
-    *   Stage1: 테이블 + 컬럼 + (복합)PK + UNIQUE  (+ SQLite는 FK까지)
-    *   Stage2: FK (SQLite는 스킵)
-    *   Stage3: 보조 인덱스
-    * ============================================================ */
-
-    /** Stage1: 테이블/컬럼 + PK + UNIQUE (+SQLite는 FK 포함) */
-    async _createStage1(trx, options = { execute: true }) {
-        const db = trx || this.db;
-
-        // DB 정보 감지(벤더/버전) → features/vendortype에 사용
-        const info = await detectAndStoreDbInfo({ db, connect: { dialect: this._connect?.dialect } });
-        const vendor = info?.flavor || info?.kind || (this.profile?.vendor ?? 'unknown');
-
-        // SQLite: FK 활성화
-        if (vendor === 'sqlite') {
-            // await db.execute(sql`PRAGMA foreign_keys = ON`);
-            await sql`PRAGMA foreign_keys = ON`.execute(db);
-            // await db.executeQuery(sql`PRAGMA foreign_keys = ON`);
-        }
-
-        // 테이블 빌드: 컬럼/타입/NULL/기본값/autoInc/PK/UNIQUE
-        let tb = db.schema.createTable(this.tableName);
-
-        // 1) addColumn
-        for (const [key, col] of this.columns.entries()) {
-            const name = (typeof col.name === 'string' && col.name) ? col.name : key;
-            const stdType = col.dataType || 'text';
-            const vendorType = col?.vendor?.[vendor]?.dataType || convertStandardToVendor(stdType, vendor).toLowerCase(); // 벤더 지정 우선, 없으면 변환   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
-            // const vendorType = convertStandardToVendor(stdType, vendor).toLowerCase();                // 표준 → 벤더 타입   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
-            if (col.virtual === true) continue; // 가상 컬럼 스킵
-
-            tb = tb.addColumn(name, vendorType, (c0) => {
-                let c = c0;
-                if (col.nullable === false) c = c.notNull();
-                if (col.autoIncrement)      c = applyAutoIncrementForVendor(c, vendor);
-                // PK는 뒤에서 복합처리도 하므로 단일 PK만 여기서 표시(복합은 제약으로 처리)
-                if (col.primaryKey === true) c = c.primaryKey();
-                if (col.unique === true)     c = c.unique();
-                if (col.check)      c = c.check(col.check);                                   // 체크 제약조건
-                if (vendor === 'mysql' || vendor === 'mariadb') {
-                    if (col.unsigned) c = c.unsigned(); // 부호 없는 숫자 (MySQL, MariaDB 전용)
-                }
-                // 기본값
-                c = applyDefault(c, col.defaultValue, vendor) || c;                       // defaultValue 규약 반영   [oai_citation:14‡apply-default.js](file-service://file-LSFSrpHpBxWGcmsNLD1EDw)
-                return c;
-            });
-        }
-
-        function applyAutoIncrementForVendor(columnBuilder, vendorName) {
-            const fn = (name) => typeof columnBuilder[name] === 'function'
-                ? columnBuilder[name].bind(columnBuilder)
-                : null;
-
-            switch ((vendorName || '').toLowerCase()) {
-            case 'mssql': {
-                const identity = fn('identity');
-                if (identity) return identity();
-                break;
-            }
-            case 'postgres': {
-                const generatedIdentity = fn('generatedAlwaysAsIdentity');
-                if (generatedIdentity) return generatedIdentity();
-                break;
-            }
-            case 'mariadb':
-            case 'mysql':
-            case 'sqlite': {
-                const autoIncrement = fn('autoIncrement');
-                if (autoIncrement) return autoIncrement();
-                break;
-            }
-            default:
-                break;
-            }
-
-            const fallback = fn('autoIncrement');
-            return fallback ? fallback() : columnBuilder;
-        }
-
-        // 2) 복합 PK/UNIQUE (unique가 string 그룹이면 복합 UNIQUE)
-        const pkCols = [];
-        // const uniqueSingles = [];
-        const uniqueGroups = new Map(); // groupKey -> [col,...]
-
-        for (const [key, col] of this.columns.entries()) {
-            const name = (typeof col.name === 'string' && col.name) ? col.name : key;
-            if (col.primaryKey === true) pkCols.push(name);
-
-            if (typeof col.unique === 'string' && col.unique.trim()) {
-                const g = col.unique.trim();
-                if (!uniqueGroups.has(g)) uniqueGroups.set(g, []);
-                uniqueGroups.get(g).push(name);
-            // } else if (col.unique === true) {
-            //     uniqueSingles.push(name);
-            }
-        }
-
-        if (pkCols.length > 1) {
-            tb = tb.addPrimaryKeyConstraint(`pk_${this.tableName}`, pkCols);
-        }
-        // for (const u of uniqueSingles) {
-        //     tb = tb.addUniqueConstraint(`uq_${this.tableName}_${u}`, [u]);
-        // }
-        for (const [g, cols] of uniqueGroups) {
-            tb = tb.addUniqueConstraint(`uq_${this.tableName}_${g}`, cols);
-        }
-
-        // 3) (SQLite 한정) FK를 Stage1에서 즉시 포함
-        if (vendor === 'sqlite') {
-            const fkGroups = this._collectFkGroups(); // Map<groupKey, {name, cols, refTable, refCols, opts}>
-            for (const [g, def] of fkGroups) {
-                tb = tb.addForeignKeyConstraint(
-                def.name || g,
-                def.cols,
-                def.refTable,
-                def.refCols,
-                (cb0) => {
-                    let cb = cb0;
-                    if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
-                    if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
-                    // match/deferrable 등은 SQLite에서 무시되므로 생략
-                    return cb;
-                }
-                );
-            }
-        }
-        return tb;
-    }
-
-    /** Stage2: FK (SQLite는 스킵) */
-    async _createStage2_FKs(trx, options = { execute: true }) {
-        const db = trx || this.db;
-        const info = getDbInfo({ db, connect: { dialect: this._connect?.dialect } }) || 
-                    await detectAndStoreDbInfo({ db, connect: { dialect: this._connect?.dialect } });
-        const vendor = info?.flavor || info?.kind || (this.profile?.vendor ?? 'unknown');
-        const sql = [];
-
-        if (vendor === 'sqlite') return sql; // Stage1에서 완료
-
-        // await this._event.emit('creating', { table: this, db, stage: 2, vendor, info });
-
-        const fkGroups = this._collectFkGroups();
-        const builders = [];
-
-        for (const [g, def] of fkGroups) {
-            let builder = db.schema
-                .alterTable(this.tableName)
-                .addForeignKeyConstraint(
-                def.name || g,
-                def.cols,
-                def.refTable,
-                def.refCols,
-                (cb0) => {
-                    let cb = cb0;
-                    if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
-                    if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
-                    // match/deferrable: PG 한정. 필요 시 벤더 체크 후 적용.
-                    if (def.opts?.match && vendor === 'postgres' && typeof cb.match === 'function') {
-                    cb = cb.match(def.opts.match.toLowerCase());
-                    }
-                    return cb;
-                }
-                );
-            builders.push(builder);
-            // sql.push(builder.compile());
-            // if (options.execute === true) await builder.execute();            
-        }
-        return builders;
-    }
-
-    /** Stage3: 보조 인덱스 */
-    async _createStage3_Indexes(trx, options = { execute: true }) {
-        const db = trx || this.db;
-        const info = getDbInfo({ db, connect: { dialect: this._connect?.dialect } }) || 
-                    await detectAndStoreDbInfo({ db, connect: { dialect: this._connect?.dialect } });
-        const vendor = info?.flavor || info?.kind || (this.profile?.vendor ?? 'unknown');
-        const sql = [];
-
-        // await this._event.emit('creating', { table: this, db, stage: 3, vendor, info });
-
-        // 컬럼 메타 → 인덱스 그룹 수집(복합/단일 자동 분류)
-        const indexDefs = collectIndexGroups(this.tableName, this.columns);          //  [oai_citation:15‡collect-index-group.js](file-service://file-WccUxnsqc1ad5caToyv7ey)
-        const builders = [];
-        
-        for (const idx of indexDefs) {
-            let builder = db.schema.createIndex(idx.name).on(this.tableName).columns(idx.columns);
-            // UNIQUE 인덱스를 인덱스 레벨에서 만들고 싶으면 확장 가능(현재는 컬럼.unique로 제약을 생성)
-            
-            // if (options.execute === true) await builder.execute();
-            builders.push(builder);
-        }
-        return builders;
-}
-
     /* ================= 내부 유틸 ================= */
-
-    /** FK 그룹 수집: SQLColumn.references 규약 기반 */
-    _collectFkGroups() {
-        // references: { target:'users.id', group?:'fk1', name?, onDelete?, onUpdate?, match?, deferrable?, initiallyDeferred? }
-        const groups = new Map(); // groupKey -> { name, cols:[], refTable, refCols:[], opts }
-        for (const [key, col] of this.columns.entries()) {
-        const ref = col.references;
-        if (!ref || !ref.target || typeof ref.target !== 'string') continue;
-
-        const colName = (typeof col.name === 'string' && col.name) ? col.name : key;
-        const [refTable, refCol] = ref.target.split('.');
-        const gk = (ref.group || ref.name || `fk_${this.tableName}_${colName}`).trim();
-
-        if (!groups.has(gk)) {
-            groups.set(gk, { name: ref.name, cols: [], refTable, refCols: [], opts: { ...ref } });
-        }
-        const g = groups.get(gk);
-        if (!g.cols.includes(colName)) g.cols.push(colName);
-        if (!g.refCols.includes(refCol)) g.refCols.push(refCol);
-
-        // 동일 그룹 내 테이블 불일치 방지
-        if (g.refTable !== refTable) {
-            throw new Error(`FK group "${gk}" has mixed target tables: ${g.refTable} vs ${refTable}`);
-        }
-        }
-        return groups;
-    }
-
-    async drop(trx) {
-        const db = trx || this.db;
-
-        // pre-drop event
-        await this._event.emit('dropping', { table: this, db: db });
-
-        // await db.schema.dropTable(this.tableName).ifExists().execute();
-        const builder = this.$drop(db); 
-        await builder.execute();
-
-        // post-drop event
-        await this._event.emit('dropped', { table: this, db: db });
-    }
-
-    async select(selOpt, trx) {
-        const db = trx || this.db;
-        // page: 1부터 시작, size: 페이지당 row 수
-        const limit = selOpt.size > 0 ? selOpt.size : 10;
-        const offset = selOpt.page > 1 ? (selOpt.page - 1) * limit : 0;
-        const fill = selOpt.fill === true ? true : false;
-        let rows = [];
-
-        if (!db) return rows;
-
-        await this._event.emit('selecting', { table: this, db: db });
-
-        const builder = await this.$select(selOpt, db);
-        rows = await builder.execute();
-
-        await this._event.emit('selected', { table: this, db: db });
-
-        if (fill === true) {
-            // this.rows.clear();
-            rows.forEach(row => {
-                this.rows.add(row);
-            });
-        }
-
-        return rows;
-    }
-
-    /**
-     * @override
-     */
-    async acceptChanges() {
-        const trans = this.rows._transQueue.select();
-        const tableName = this._name;
-
-        for (const item of trans) {
-            // const pk = 'id';
-            // const { [pk]: id, ...changes } = row.ref;
-            const row = item.ref;
-            if (item.cmd === 'I') {
-                await this.insert(row);
-            } else if (item.cmd === 'U') {
-                await this.update(row);
-            } else if (item.cmd === 'D') {
-                await this.delete(row);
-            }
-        }
-        this.rows.commit();
-    }
-
-    async rejectChanges() {
-        this.rows.rollback();
-        //TODO: DB에서 처리할 지 검토
-    }
-
-    async getCreateSQL() {
-        const list = [];
-        const builders = await this.$create();
-
-        for (const b of builders) {
-            const sql = b.compile();
-            list.push(sql);
-        }
-        return list;
-    }
-
-    async getDropSQL() {
-        const builder = await this.$drop();
-        return builder.compile();
-    }
-
-    async getInsertSQL(p_row) {
-        const builder = await this.$insert(p_row);
-        return builder.compile();
-    }
-
-    async getSelectSQL(selOpt) {
-        const builder = await this.$select(selOpt);
-        return builder.compile();
-    }
-
-    async getUpdateSQL(p_updOpt) {
-        const builder = await this.$update(p_updOpt);
-        return builder.compile();
-    }
-
-    async getDeleteSQL(p_where) {
-        const builder = await this.$delete(p_where);
-        return builder.compile();
-    }
-    
-    // ############################################
-
-    // TODO: 공통 $, _ 접두사 규약 정리
     $whereBuilder(p_builder, p_where) {
         
         for (const k in p_where) {
@@ -659,19 +298,365 @@ class SQLTable extends MetaTable {
         return 0;
     }
 
+    _getPrimaryKeyColumns() {
+        return this.columns.filter(c => c.primaryKey && !c.virtual).map(c => c.columnName);
+    }
+
+    /** FK 그룹 수집: SQLColumn.references 규약 기반 */
+    _collectFkGroups() {
+        // references: { target:'users.id', group?:'fk1', name?, onDelete?, onUpdate?, match?, deferrable?, initiallyDeferred? }
+        const groups = new Map(); // groupKey -> { name, cols:[], refTable, refCols:[], opts }
+        for (const [key, col] of this.columns.entries()) {
+        const ref = col.references;
+        if (!ref || !ref.target || typeof ref.target !== 'string') continue;
+
+        const colName = (typeof col.name === 'string' && col.name) ? col.name : key;
+        const [refTable, refCol] = ref.target.split('.');
+        const gk = (ref.group || ref.name || `fk_${this.tableName}_${colName}`).trim();
+
+        if (!groups.has(gk)) {
+            groups.set(gk, { name: ref.name, cols: [], refTable, refCols: [], opts: { ...ref } });
+        }
+        const g = groups.get(gk);
+        if (!g.cols.includes(colName)) g.cols.push(colName);
+        if (!g.refCols.includes(refCol)) g.refCols.push(refCol);
+
+        // 동일 그룹 내 테이블 불일치 방지
+        if (g.refTable !== refTable) {
+            throw new Error(`FK group "${gk}" has mixed target tables: ${g.refTable} vs ${refTable}`);
+        }
+        }
+        return groups;
+    }
+
     // ############################################
+
+    async init() {
+        const info = await detectAndStoreDbInfo(this);
+        this.profile.vendor = info.kind;
+        this.profile.version = info.version;
+        this.profile.features = resolveDbFeatures(info.kind, info.version);
+    }
+
+    /**
+     * @override
+     */
+    async acceptChanges() {
+        const trans = this.rows._transQueue.select();
+        const tableName = this._name;
+
+        for (const item of trans) {
+            // const pk = 'id';
+            // const { [pk]: id, ...changes } = row.ref;
+            const row = item.ref;
+            if (item.cmd === 'I') {
+                await this.insert(row);
+            } else if (item.cmd === 'U') {
+                await this.update(row);
+            } else if (item.cmd === 'D') {
+                await this.delete(row);
+            }
+        }
+        this.rows.commit();
+    }
+
+    async rejectChanges() {
+        this.rows.rollback();
+        //TODO: DB에서 처리할 지 검토
+    }
+
+    //  *************** CREATE *********************
+    async create(p_options) {
+        const db = p_options?.trx || this.db;
+        let result = null;
+
+        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
+            await db.transaction().execute(async (trx) => {
+                result = await this._create({ ...p_options, trx });
+            });
+        } else {
+            result = await this._create({ ...p_options, trx: db });
+        }
+        return result;
+    }
+
+    createBuilders(p_options) {
+        const db = p_options.trx || this.db;
+        const builders = [];
+
+        builders.push( this.$createStage1(db));
+        builders.push(...this.$createStage2_FKs(db));
+        builders.push(...this.$createStage3_Indexes(db));
+        return builders;
+    }
+
+    async _create(p_options) {
+        const db = p_options.trx;
+        const safe = { dryRun: false, ...p_options };
+        const vendor = this.profile?.vendor || 'unknown';
+
+        await this._event.emit('creating', { table: this, db: db, options: p_options });
+
+        // SQLite: FK 활성화
+        if (vendor === 'sqlite') {
+            await sql`PRAGMA foreign_keys = ON`.execute(db);
+        }
+
+        try {
+            const builders = this.createBuilders(p_options);
+            if (safe.dryRun === true) {
+                await this._event.emit('created', { table: this, db: db, options: safe });
+                return builders.map(b => b.compile());
+            }
+
+            for (let i = 0; i < builders.length; i++) {
+                await builders[i].execute();
+            }
+
+            await this._event.emit('created', { table: this, db: db, options: safe });
+            return;
+
+        } catch (error) {
+            await this._event.emit('createFailed', { table: this, db: db, options: safe, error });
+            throw error;
+        }
+    }
+
+    /* ============================================================
+    * 3-Stage DDL: Stage1 → Stage2 → Stage3
+    *   Stage1: 테이블 + 컬럼 + (복합)PK + UNIQUE  (+ SQLite는 FK까지)
+    *   Stage2: FK (SQLite는 스킵)
+    *   Stage3: 보조 인덱스
+    * =========================================================== */
+   
+    /** Stage1: 테이블/컬럼 + PK + UNIQUE (+SQLite는 FK 포함) */
+    $createStage1(trx, options = { execute: true }) {
+        const db = trx || this.db;
+        const vendor = this.profile?.vendor || 'unknown';
+
+        // 테이블 빌드: 컬럼/타입/NULL/기본값/autoInc/PK/UNIQUE
+        let tb = db.schema.createTable(this.tableName);
+
+        // 1) addColumn
+        for (const [key, col] of this.columns.entries()) {
+            const name = (typeof col.name === 'string' && col.name) ? col.name : key;
+            const stdType = col.dataType || 'text';
+            const vendorType = col?.vendor?.[vendor]?.dataType || convertStandardToVendor(stdType, vendor).toLowerCase(); // 벤더 지정 우선, 없으면 변환   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
+            // const vendorType = convertStandardToVendor(stdType, vendor).toLowerCase();                // 표준 → 벤더 타입   [oai_citation:13‡convert-data-type.js](file-service://file-Qb3v2NGwg15TAUNpa2xSBn)
+            if (col.virtual === true) continue; // 가상 컬럼 스킵
+
+            tb = tb.addColumn(name, vendorType, (c0) => {
+                let c = c0;
+                if (col.nullable === false) c = c.notNull();
+                if (col.autoIncrement)      c = applyAutoIncrementForVendor(c, vendor);
+                // PK는 뒤에서 복합처리도 하므로 단일 PK만 여기서 표시(복합은 제약으로 처리)
+                if (col.primaryKey === true) c = c.primaryKey();
+                if (col.unique === true)     c = c.unique();
+                if (col.check)      c = c.check(col.check);                                   // 체크 제약조건
+                if (vendor === 'mysql' || vendor === 'mariadb') {
+                    if (col.unsigned) c = c.unsigned(); // 부호 없는 숫자 (MySQL, MariaDB 전용)
+                }
+                // 기본값
+                c = applyDefault(c, col.defaultValue, vendor) || c;                       // defaultValue 규약 반영   [oai_citation:14‡apply-default.js](file-service://file-LSFSrpHpBxWGcmsNLD1EDw)
+                return c;
+            });
+        }
+
+        function applyAutoIncrementForVendor(columnBuilder, vendorName) {
+            const fn = (name) => typeof columnBuilder[name] === 'function'
+                ? columnBuilder[name].bind(columnBuilder)
+                : null;
+
+            switch ((vendorName || '').toLowerCase()) {
+            case 'mssql': {
+                const identity = fn('identity');
+                if (identity) return identity();
+                break;
+            }
+            case 'postgres': {
+                const generatedIdentity = fn('generatedAlwaysAsIdentity');
+                if (generatedIdentity) return generatedIdentity();
+                break;
+            }
+            case 'mariadb':
+            case 'mysql':
+            case 'sqlite': {
+                const autoIncrement = fn('autoIncrement');
+                if (autoIncrement) return autoIncrement();
+                break;
+            }
+            default:
+                break;
+            }
+
+            const fallback = fn('autoIncrement');
+            return fallback ? fallback() : columnBuilder;
+        }
+
+        // 2) 복합 PK/UNIQUE (unique가 string 그룹이면 복합 UNIQUE)
+        const pkCols = [];
+        // const uniqueSingles = [];
+        const uniqueGroups = new Map(); // groupKey -> [col,...]
+
+        for (const [key, col] of this.columns.entries()) {
+            const name = (typeof col.name === 'string' && col.name) ? col.name : key;
+            if (col.primaryKey === true) pkCols.push(name);
+
+            if (typeof col.unique === 'string' && col.unique.trim()) {
+                const g = col.unique.trim();
+                if (!uniqueGroups.has(g)) uniqueGroups.set(g, []);
+                uniqueGroups.get(g).push(name);
+            // } else if (col.unique === true) {
+            //     uniqueSingles.push(name);
+            }
+        }
+
+        if (pkCols.length > 1) {
+            tb = tb.addPrimaryKeyConstraint(`pk_${this.tableName}`, pkCols);
+        }
+        // for (const u of uniqueSingles) {
+        //     tb = tb.addUniqueConstraint(`uq_${this.tableName}_${u}`, [u]);
+        // }
+        for (const [g, cols] of uniqueGroups) {
+            tb = tb.addUniqueConstraint(`uq_${this.tableName}_${g}`, cols);
+        }
+
+        // 3) (SQLite 한정) FK를 Stage1에서 즉시 포함
+        if (vendor === 'sqlite') {
+            const fkGroups = this._collectFkGroups(); // Map<groupKey, {name, cols, refTable, refCols, opts}>
+            for (const [g, def] of fkGroups) {
+                tb = tb.addForeignKeyConstraint(
+                def.name || g,
+                def.cols,
+                def.refTable,
+                def.refCols,
+                (cb0) => {
+                    let cb = cb0;
+                    if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
+                    if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
+                    // match/deferrable 등은 SQLite에서 무시되므로 생략
+                    return cb;
+                }
+                );
+            }
+        }
+        return tb;
+    }
+
+    /** Stage2: FK (SQLite는 스킵) */
+    $createStage2_FKs(trx, options = { execute: true }) {
+        const db = trx || this.db;
+        const vendor = this.profile?.vendor || 'unknown';
+        const sql = [];
+
+        if (vendor === 'sqlite') return sql; // Stage1에서 완료
+
+
+        const fkGroups = this._collectFkGroups();
+        const builders = [];
+
+        for (const [g, def] of fkGroups) {
+            let builder = db.schema
+                .alterTable(this.tableName)
+                .addForeignKeyConstraint(
+                def.name || g,
+                def.cols,
+                def.refTable,
+                def.refCols,
+                (cb0) => {
+                    let cb = cb0;
+                    if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
+                    if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
+                    // match/deferrable: PG 한정. 필요 시 벤더 체크 후 적용.
+                    if (def.opts?.match && vendor === 'postgres' && typeof cb.match === 'function') {
+                    cb = cb.match(def.opts.match.toLowerCase());
+                    }
+                    return cb;
+                }
+                );
+            builders.push(builder);
+        }
+        return builders;
+    }
+
+    /** Stage3: 보조 인덱스 */
+    $createStage3_Indexes(trx, options = { execute: true }) {
+        const db = trx || this.db;
+        const vendor = this.profile?.vendor || 'unknown';
+        const sql = [];
+
+        // 컬럼 메타 → 인덱스 그룹 수집(복합/단일 자동 분류)
+        const indexDefs = collectIndexGroups(this.tableName, this.columns);          //  [oai_citation:15‡collect-index-group.js](file-service://file-WccUxnsqc1ad5caToyv7ey)
+        const builders = [];
+        
+        for (const idx of indexDefs) {
+            let builder = db.schema.createIndex(idx.name).on(this.tableName).columns(idx.columns);
+            // UNIQUE 인덱스를 인덱스 레벨에서 만들고 싶으면 확장 가능(현재는 컬럼.unique로 제약을 생성)
+            
+            builders.push(builder);
+        }
+        return builders;
+}
+
+    //  *************** DROP *********************
+    async drop(p_options) {
+        const db = p_options?.trx || this.db;
+        let result;
+
+        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
+            await db.transaction().execute(async (trx) => {
+                result = await this._drop({ ...p_options, trx });
+            });
+        } else {
+            result = await this._drop({ ...p_options, trx: db });
+        }
+        return result;
+    }
+
+    dropBuilder(p_options) {
+        const db = p_options.trx || this.db;
+        const builder = db.schema.dropTable(this.tableName).ifExists();
+        return builder;
+    }
+
+    async _drop(p_options) {
+        const db = p_options?.trx || this.db;
+        const safe = { dryRun: false, ...p_options };
+
+        await this._event.emit('dropping', { table: this, db: db, options: p_options });
+
+        try {
+            const builder = this.dropBuilder(p_options);
+            if (safe.dryRun === true) {
+                await this._event.emit('dropped', { table: this, db: db, options: safe });
+                return builder.compile();
+            }
+
+            await builder.execute();
+
+            await this._event.emit('dropped', { table: this, db: db, options: safe });
+            return;
+
+        } catch (error) {
+            await this._event.emit('dropFailed', { table: this, db: db, options: safe, error });
+            throw error;
+        }        
+
+    }
+    
+    //  *************** SELECT *********************
     async select(p_select, p_options) {
         const db = p_options?.trx || this.db;
         let result;
 
-        if (db && db.constructor && db.constructor.name === 'Kysely') {
+        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
             await db.transaction().execute(async (trx) => {
                 result = await this._select(p_select, { ...p_options, trx });
             });
         } else {
             result = await this._select(p_select, { ...p_options, trx: db });
         }
-        return result;        
+        return result;
     }
 
     selectBuilder(p_select, p_options) {
@@ -720,7 +705,7 @@ class SQLTable extends MetaTable {
         // order by
         if (requireOrderBy || Object.keys(orderBy).length > 0) {   // MSSQL은 OFFSET 사용 시 ORDER BY 필수
             if (Object.keys(orderBy).length === 0) {
-                const pkColumns = this.getPrimaryKeyColumns();
+                const pkColumns = this._getPrimaryKeyColumns();
                 pkColumns.forEach(col => {
                     orderBy[col] = 'asc';
                 });
@@ -765,12 +750,12 @@ class SQLTable extends MetaTable {
         }
     }
 
-    // ############################################
+    //  *************** UPDATE *********************
     async update(p_update, p_options) {
         const db = p_options?.trx || this.db;
         let result;
 
-        if (db && db.constructor && db.constructor.name === 'Kysely') {
+        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
             await db.transaction().execute(async (trx) => {
                 result = await this._update(p_update, { ...p_options, trx });
             });
@@ -826,12 +811,12 @@ class SQLTable extends MetaTable {
         }
     }
 
-    // ############################################
+    //  *************** INSERT *********************
     async insert(p_data, p_options) {
         const db = p_options?.trx || this.db;
         let result;
 
-        if (db && db.constructor && db.constructor.name === 'Kysely') {
+        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
             await db.transaction().execute(async (trx) => {
                 if (Array.isArray(p_data)) {
                     const results = [];
@@ -935,12 +920,12 @@ class SQLTable extends MetaTable {
         }
     }
 
-    // ###### 삭제 관련 메서드 ######################
+    //  *************** DELETE *********************
     async delete(p_where, p_options) {
         const db = p_options?.trx || this.db;
         let result;
 
-        if (db && db.constructor && db.constructor.name === 'Kysely') {
+        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
             await db.transaction().execute(async (trx) => {
                 result = await this._delete(p_where, { ...p_options, trx });
             });
@@ -990,13 +975,6 @@ class SQLTable extends MetaTable {
             throw error;
         }
     }
-}
-
-function isObject(v) {
-    return v && typeof v === 'object' && !Array.isArray(v);
-}
-function isNumber(v) {
-    return (typeof v === 'number') || (typeof v === 'bigint');
 }
 
 export default SQLTable;

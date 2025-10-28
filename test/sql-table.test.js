@@ -225,8 +225,10 @@ describe('[target: sql-table.js]', () => {
             table.columns.add('id', { dataType: 'int', primaryKey: true, autoIncrement: true, nullable: false });
             table.columns.add('email', { dataType: 'varchar(255)', unique: true, nullable: false, indexes: 'em' });
             table.columns.add('updated_at', { dataType: 'timestamp', nullable: true, defaultValue: { kind: 'now' }, onUpdateValue: { kind: 'now' } });
+            await table.init();
 
-            const sql = await table.getCreateSQL();
+            // const sql = await table.getCreateSQL();
+            const sql = await table.create({ dryRun: true });
 
             expect(sql.length).toBe(2);
             expect(sql[0].sql).toBe(
@@ -234,7 +236,7 @@ describe('[target: sql-table.js]', () => {
             );
             expect(sql[1].sql).toBe(`create index "idx_person_em_email" on "person" ("email")`);
 
-            const dropSql = await table.getDropSQL();
+            const dropSql = await table.drop({ dryRun: true });
             expect(dropSql.sql).toBe(`drop table if exists "person"`);
         });
 
