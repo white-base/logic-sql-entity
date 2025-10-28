@@ -128,164 +128,6 @@ class SQLTable extends MetaTable {
         return builder;
     }
 
-    // async $insert(p_data, trx) {
-    //     const db = trx || this.db;
-    //     const data = {};
-    //     let query = null;
-
-    //     if (p_data instanceof MetaRow) {
-    //         for (let i = 0; i < p_data.count; i++) {
-    //             const key = this.columns.indexToKey(i);
-    //             if (this.columns.existColumnName(key)) {
-    //                 data[key] = p_data[key];
-    //             }
-    //         }
-
-    //     } else if (_isObject(p_data)) {
-    //         for (const key in p_data) {
-    //             if (!Object.prototype.hasOwnProperty.call(p_data, key)) continue;
-    //             if (this.columns.existColumnName(key)) {
-    //                 data[key] = p_data[key];
-    //             }
-    //         }
-
-    //     } else {
-    //         throw new Error('Invalid row type');
-    //     }
-
-    //     let result;
-    //     if (this.profile.features?.hasReturning === true) {
-    //         result = await this.db.insertInto(this.tableName)
-    //             .values({ ...data })
-    //             .returningAll();
-    //             // .executeTakeFirst();            
-
-    //     } else {
-    //         result = await db.insertInto(this.tableName)
-    //             .values({ ...data });
-    //             // .executeTakeFirstOrThrow();
-    //     }
-
-    //     // console.log(result);
-    //     return result;
-    // }
-
-    // async $select(selOpt, trx) {
-    //     const db = trx || this.db;
-    //     // page: 1부터 시작, size: 페이지당 row 수
-    //     const limit = selOpt.size > 0 ? selOpt.size : 10;
-    //     const offset = selOpt.page > 1 ? (selOpt.page - 1) * limit : 0;
-    //     let rows = [];
-    //     let query;
-    //     // if (!db) return rows;
-
-    //     try {
-    //         query = db.selectFrom(this.tableName)
-    //             .selectAll()
-    //             .limit(limit)
-    //             .offset(offset);
-
-    //         // TODO: select, where, orderby, groupby, having 등 옵션 처리
-    //         for (const key in selOpt.where) {
-    //             if (this.columns.existColumnName(key) === false) continue;
-    //             if (Object.prototype.hasOwnProperty.call(selOpt.where, key)) {
-    //                 query = query.where(key, '=', selOpt.where[key]);
-    //             }
-    //         }
-    //         // rows = await query.execute();
-            
-    //     } catch (err) {
-    //         if (err.message && err.message.includes('no such table')) {
-    //             throw new Error(`테이블(${this.tableName})이 존재하지 않습니다.`);
-    //         } else {
-    //             throw err;
-    //         }
-    //     }
-    //     return query;   // TODO: 위치 try 밖으로 빼기
-    // }
-
-    // // TODO: 삭제 대기
-    // async $delete(p_where, trx) {
-    //     let pkCount = 0; // PK 조건 개수 카운트
-    //     const db = trx || this.db;
-    //     let builder;
-
-    //     try {
-    //         if (p_where instanceof MetaRow || _isObject(p_where)) {
-    //             builder = db.deleteFrom(this.tableName);
-            
-    //             this.columns.forEach((col, key) => {
-    //                 if(col.primaryKey !== true) return; // PK만 조건
-    //                 if(col.virtual === true) return;  // 가상 컬럼 스킵
-    //                 builder = builder.where(col.columnName, '=', p_where[col.columnName]);
-    //                 pkCount++;
-    //             });
-
-    //             // PK 조건이 없으면 예외 발생
-    //             if (pkCount === 0) {
-    //                 throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
-    //             }
-
-    //             // await builder.executeTakeFirst();
-    //             // return { affectedRows: res.numDeletedRows ?? 0 }
-
-    //         } else {
-    //             throw new Error('Invalid row type');
-    //         }
-    //     } catch (err) {
-    //         throw new Error('Invalid row type' + err.message);
-    //     }
-    //     return builder;
-    // }
-
-    // async $update(p_updOpt, trx) {
-    //     const change = {};
-    //     let pkCount = 0; // PK 조건 개수 카운트
-
-    //     try {
-    //         let query = await this.db.updateTable(this.tableName);
-
-    //         if (p_updOpt instanceof MetaRow) {
-    //             for (let i = 0; i < p_updOpt.count; i++) {
-    //                 // const key = p_row[i].columnName;
-    //                 const col = this.columns[i];
-    //                 if(col.primaryKey === true) continue; // PK만 조건
-    //                 if(col.virtual === true) continue;  // 가상 컬럼 스킵
-    //                 change[col.columnName] = p_updOpt[i];
-    //             }
-    //         } else if (_isObject(p_updOpt)) {
-    //             for (const key in p_updOpt) {
-    //                 if (!Object.prototype.hasOwnProperty.call(p_updOpt, key)) continue;
-    //                 const col = this.columns[key];
-    //                 if (!col) continue;
-    //                 if (col.primaryKey === true) continue; // PK만 조건
-    //                 if (col.virtual === true) continue;  // 가상 컬럼 스킵
-    //                 change[key] = p_updOpt[key];
-    //             }
-    //         } else {
-    //             throw new Error('Invalid row type');
-    //         }
-    //         query = query.set(change);
-
-    //         this.columns.forEach((col, key) => {
-    //             if(col.primaryKey === false) return; // PK만 조건
-    //             if(col.virtual == true) return;  // 가상 컬럼 스킵
-    //             query = query.where(col.columnName, '=', p_updOpt[col.columnName]);
-    //             pkCount++;
-    //         });
-    //         // PK 조건이 없으면 예외 발생
-    //         if (pkCount === 0) {
-    //             throw new Error('update: PK 조건이 없어 전체 테이블이 수정될 수 있습니다.');
-    //         }
-
-    //         const result = query;
-    //         return result;
-
-    //     } catch (err) {
-    //         throw new Error('Invalid row type' + err.message);
-    //     }
-    // }
-
     async init() {
         const info = await detectAndStoreDbInfo(this);
         this.profile.vendor = info.kind;
@@ -440,15 +282,6 @@ class SQLTable extends MetaTable {
                 );
             }
         }
-        
-        // 디버깅
-        // const node = tb.toOperationNode();
-        // const compiled = db.compiler.compileNode(node);
-        // console.log(compiled.sql);
-        // console.log(compiled.parameters);
-        
-        // if (options.execute === true) await tb.execute();
-        // return tb.compile();
         return tb;
     }
 
@@ -560,52 +393,6 @@ class SQLTable extends MetaTable {
         await this._event.emit('dropped', { table: this, db: db });
     }
 
-    // async insert(p_row, trx) {
-    //     const db = trx || this.db;
-    //     let results = []
-    //     const data = {};
-    //     const hasReturning = this.profile.features?.hasReturning;
-        
-    //     await this._event.emit('inserting', { table: this, db: db });
-
-    //     // TODO: select 리턴 처리
-    //     // const builders = await this.$insert(db);
-    //     // for (const b of builders) {
-    //     //     const r = await b.execute();
-    //     //     results.push(r);
-    //     // }
-
-    //     const builder = await this.$insert(p_row, db);
-    //     const sql = builder.compile();
-    //     let result = await builder.executeTakeFirstOrThrow();
-    //     let builder2;
-    //     // features.hasReturning 가 없으면 insertId로 select
-    //     if (hasReturning == false || result.insertId !== undefined) {
-    //         // insertId 가 존재할 경우
-    //         if (result.insertId > 0) {
-    //             const id = this.columns.find(c => c.primaryKey === true && c.autoIncrement === true)?.columnName;
-    //             builder2 = await this.$select({ where: { [id]: result.insertId }, page: 1, size: 1 });
-    //             result = await builder2.executeTakeFirst();
-    //         } else {
-    //             const where = {};
-    //             for (const [k, v] of this.columns.entries()) {
-    //                 if (v.primaryKey === true && p_row[v.columnName] !== undefined ) {
-    //                     where[v.columnName] = p_row[v.columnName];
-    //                 }
-    //             }
-    //             builder2 = await this.$select({ where: where, page: 1, size: 1 });
-    //             result = await builder2.executeTakeFirst();
-    //         }
-    //         console.log('22');
-    //     }
-
-    //     await this._event.emit('inserted', { table: this, db: db });
-
-    //     // const LEN = results.length;
-    //     // return results[LEN - 1];
-    //     return result;
-    // }
-
     async select(selOpt, trx) {
         const db = trx || this.db;
         // page: 1부터 시작, size: 페이지당 row 수
@@ -633,31 +420,6 @@ class SQLTable extends MetaTable {
         return rows;
     }
 
-    // async update(p_updOpt, trx) {
-    //     const db = trx || this.db;
-
-    //     await this._event.emit('updating', { table: this, db: db });
-        
-    //     const builder = await this.$update(p_updOpt, db);
-    //     const result = await builder.executeTakeFirst();
-        
-    //     await this._event.emit('updated', { table: this, db: db });
-    //     return result;
-    // }
-
-    // TODO: 삭제 대기
-    // async delete(p_where, trx) {
-    //     const db = trx || this.db;
-
-    //     await this._event.emit('deleting', { table: this, db: db });
-        
-    //     const builder = await this.$delete(p_where, db);
-    //     const result = await builder.execute();
-
-    //     await this._event.emit('deleted', { table: this, db: db });
-    //     return result;
-    // }
-
     /**
      * @override
      */
@@ -671,13 +433,10 @@ class SQLTable extends MetaTable {
             const row = item.ref;
             if (item.cmd === 'I') {
                 await this.insert(row);
-                // await this.db.insertInto(tableName).values({ ...changes }).execute();
             } else if (item.cmd === 'U') {
                 await this.update(row);
-                // await this.db.updateTable(tableName).set({ ...changes }).where('id', '=', id).execute();
             } else if (item.cmd === 'D') {
                 await this.delete(row);
-                // await this.db.deleteFrom(tableName).where('id', '=', id).execute(); // TODO: 복합 PK 지원
             }
         }
         this.rows.commit();
@@ -728,13 +487,52 @@ class SQLTable extends MetaTable {
 
     // TODO: 공통 $, _ 접두사 규약 정리
     $whereBuilder(p_builder, p_where) {
+        
         for (const k in p_where) {
             const value = p_where[k];
             if (value === undefined) {
                 throw new Error(`컬럼 "${k}" 값이 undefined 입니다.`);
-            }
-            if (Array.isArray(value)) {
+            } else if (Array.isArray(value)) {
                 p_builder = p_builder.where(k, value[0], value[1]);
+                continue;
+            } else if (isObject(value)) {
+                for (const opRaw in value) {
+                    const v = value[opRaw];
+                    if (v === undefined) {
+                        throw new Error(`컬럼 "${k}" 값이 undefined 입니다.`);
+                    }
+
+                    // 연산자 매핑: '=>' 등을 '>='로 변환 등
+                    let op = opRaw;
+                    if (opRaw === '=>') op = '>=';   // 사용자가 예시로 준 '=>' 처리
+                    if (opRaw === '=<') op = '<=';   // 혹시 사용될 수 있는 표현 처리
+
+                    // 간단한 검증/특수 처리
+                    const lop = String(op).toLowerCase();
+                    if (lop === 'in') {
+                        if (!Array.isArray(v)) {
+                            throw new Error(`Operator "in" requires an array value for column "${k}".`);
+                        }
+                        p_builder = p_builder.where(k, 'in', v);
+                    } else if (lop === 'between') {
+                        if (!Array.isArray(v) || v.length !== 2) {
+                            throw new Error(`Operator "between" requires an array of two values for column "${k}".`);
+                        }
+                        // REVIEW: between 처리 방법 확인
+                        // p_builder = p_builder.where(k, 'between', v);
+                        const [min, max] = v;
+                        p_builder = p_builder.where(k, '>=', min).where(k, '<=', max);
+                    } else if (lop === 'not between') {
+                        if (!Array.isArray(v) || v.length !== 2) {
+                            throw new Error(`Operator "not between" requires an array of two values for column "${k}".`);
+                        }
+                        // REVIEW: between 처리 방법 확인
+                        const [min, max] = v;
+                        p_builder = p_builder.where((eb) => eb(k, '<', min).or(eb(k, '>', max)));  
+                    } else {
+                        p_builder = p_builder.where(k, op, v);
+                    }
+                }
                 continue;
             }
             p_builder = p_builder.where(k, '=', value);
@@ -794,6 +592,17 @@ class SQLTable extends MetaTable {
                 
                 data[key] = p_data[key];
             }
+        } else if (Array.isArray(p_data)) {
+            p_data.forEach(key => {
+                const col = this.columns[key];
+                // 컬럼 타입별 필터링
+                if (!col) return;
+                if (type === 'pk' && (!col.primaryKey || col.virtual)) return;
+                if (type === 'data' && col.virtual) return;
+                if (type === 'set' && (col.primaryKey || col.virtual)) return;
+
+                data[key] = p_data[key];
+            });
         }
     
         return data;
@@ -878,28 +687,19 @@ class SQLTable extends MetaTable {
         const requireOrderBy = this.profile.vendor === 'mssql' ? true : false; // MSSQL은 OFFSET 사용 시 ORDER BY 필수
         let rows = [];
         let builder;
-
-        const selectedColumns = this.$getColumns(select, 'data');
-        if (Object.keys(selectedColumns).length > 0) {
-            select = Object.keys(selectedColumns);
-        }
-
         
         builder = db.selectFrom(this.tableName);
         
         // select
-        if (Object.keys(select).length > 0) {
-            if (distinct) {
-                builder = builder.distinct(select);
-            } else {
-                builder = builder.select(select);
-            }
+        if ((Array.isArray(select) && select.length > 0 && select[0] !== '*')) {
+            builder = builder.select(select);
         } else {
-            if (distinct) {
-                builder = builder.distinct();
-            } else {
-                builder = builder.selectAll();
-            }
+            builder = builder.selectAll();
+        }
+        
+        // distinct
+        if (distinct) {
+            builder = builder.distinct();
         }
         
         // where
@@ -918,7 +718,7 @@ class SQLTable extends MetaTable {
         }
 
         // order by
-        if (requireOrderBy) {   // MSSQL은 OFFSET 사용 시 ORDER BY 필수
+        if (requireOrderBy || Object.keys(orderBy).length > 0) {   // MSSQL은 OFFSET 사용 시 ORDER BY 필수
             if (Object.keys(orderBy).length === 0) {
                 const pkColumns = this.getPrimaryKeyColumns();
                 pkColumns.forEach(col => {
@@ -927,7 +727,7 @@ class SQLTable extends MetaTable {
             }
             builder = this.$orderByBuilder(builder, orderBy);
         }
-        
+
         // page, size
         builder = builder.limit(limit).offset(offset);
         return builder;
@@ -1025,31 +825,6 @@ class SQLTable extends MetaTable {
             throw error;
         }
     }
-
-    // _normalizeUpdateResult(result) {
-    //     // if (isNumber(result.numUpdatedRows)) return { affectedRows: Number(result.numUpdatedRows) };
-    //     // 가능한 드라이버 반환 키들 중에서 숫자 값을 찾아 단순 숫자로 반환
-    //     const candidates = [
-    //         'numUpdatedRows',
-    //         'numAffectedRows',
-    //         'affectedRows',
-    //         'affected_rows',
-    //         'changes',
-    //         'rowCount',
-    //         'count'
-    //     ];
-    //     for (const k of candidates) {
-    //         const v = result?.[k];
-    //         if (v == null) continue;
-    //         if (!isNumber(v) && typeof v !== 'string') continue;
-    //         const n = Number(v);
-    //         return isNaN(n) ? 0 : n;
-    //     }
-    //     // 일부 드라이버는 행 배열을 반환할 수 있음
-    //     if (Array.isArray(result)) return result.length;
-    //     if (Array.isArray(result?.rows)) return result.rows.length;
-    //     return 0;
-    // }
 
     // ############################################
     async insert(p_data, p_options) {
@@ -1160,31 +935,6 @@ class SQLTable extends MetaTable {
         }
     }
 
-    // _normalizeInsertResult(result) {
-    //     // if (isNumber(result.numInsertedRows)) return { affectedRows: Number(result.numInsertedRows) };
-    //     // 가능한 드라이버 반환 키들 중에서 숫자 값을 찾아 단순 숫자로 반환
-    //     const candidates = [
-    //         'numInsertedRows',
-    //         'numAffectedRows',
-    //         'affectedRows',
-    //         'affected_rows',
-    //         'changes',
-    //         'rowCount',
-    //         'count'
-    //     ];
-    //     for (const k of candidates) {
-    //         const v = result?.[k];
-    //         if (v == null) continue;
-    //         if (!isNumber(v) && typeof v !== 'string') continue;
-    //         const n = Number(v);
-    //         return isNaN(n) ? 0 : n;
-    //     }
-    //     // 일부 드라이버는 행 배열을 반환할 수 있음
-    //     if (Array.isArray(result)) return result.length;
-    //     if (Array.isArray(result?.rows)) return result.rows.length;
-    //     return 0; 
-    // }
-
     // ###### 삭제 관련 메서드 ######################
     async delete(p_where, p_options) {
         const db = p_options?.trx || this.db;
@@ -1212,17 +962,6 @@ class SQLTable extends MetaTable {
         if (Object.keys(pk).length === 0) throw new Error('delete: PK 조건이 없어 전체 테이블이 삭제될 수 있습니다.');
         
         builder = db.deleteFrom(this.tableName);
-        // for (const k in pk) {
-        //     const value = pk[k];
-        //     if (value === undefined) {
-        //         throw new Error(`delete: PK 컬럼 "${k}" 값이 undefined 입니다.`);
-        //     }
-        //     if (Array.isArray(value)) {
-        //         builder = builder.where(k, value[0], value[1]);
-        //         continue;
-        //     }
-        //     builder = builder.where(k, '=', value);
-        // }
         return this.$whereBuilder(builder, pk);
     }
 
@@ -1251,67 +990,6 @@ class SQLTable extends MetaTable {
             throw error;
         }
     }
-
-
-    // _normalizeDeleteResult(result) {
-    //     // 배열인 경우: 여러 드라이버/트랜잭션 반환 형태 처리
-    //     if (Array.isArray(result)) {
-    //         if (result.length === 0) {
-    //             return 0;
-    //         }
-    //         const first = result[0];
-
-    //         // 첫 요소가 DeleteResult/OkPacket 형태인지 확인
-    //         const candidate = first && typeof first === 'object'
-    //             ? (
-    //                 first.numDeletedRows ??
-    //                 first.affectedRows ??
-    //                 first.affected_rows ??
-    //                 first.changes ??
-    //                 first.rowCount ??
-    //                 first.count ??
-    //                 first.numAffectedRows ??
-    //                 null
-    //             )
-    //             : null;
-
-    //         if (candidate != null) {
-    //             // bigint일 수 있으므로 숫자로 변환
-    //             const affected = Number(candidate);
-    //             return { affectedRows: isNaN(affected) ? 0 : affected, rows: result };
-    //         }
-
-    //         // 그 외에는 결과 배열을 실제 행 배열로 간주
-    //         return { affectedRows: result.length, rows: result };
-    //     }
-
-    //     // 단일 객체 형태 처리 (MySQL OkPacket 등)
-    //     const scalarKeys = [
-    //         'numDeletedRows',
-    //         'affectedRows',
-    //         'affected_rows',
-    //         'changes',
-    //         'rowCount',
-    //         'count',
-    //         'numAffectedRows'
-    //     ];
-    //     for (const key of scalarKeys) {
-    //         const value = result?.[key];
-    //         if (value == null) continue;
-    //         if (!isNumber(value) && typeof value !== 'string') continue;
-    //         const v = Number(value);
-    //         return { affectedRows: isNaN(v) ? 0 : v };
-    //     }
-
-    //     // 일부 드라이버는 행 배열을 직접 반환하기도 함
-    //     if (Array.isArray(result?.rows)) {
-    //         return { affectedRows: result.rows.length, rows: result.rows };
-    //     }
-
-    //     return { affectedRows: 0 };
-    // }
-    
-
 }
 
 function isObject(v) {

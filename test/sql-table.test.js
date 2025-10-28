@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { expect, jest } from '@jest/globals';
 // import { createTestDB } from './db.js'
 import { MetaRegistry } from 'logic-entity';
 
@@ -569,7 +569,7 @@ describe('[target: sql-table.js]', () => {
                 table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
                 table.columns.add('name', { nullable: false });
                 table.columns.add('age', { nullable: false });
-                table.columns.add('email', { nullable: true });
+                table.columns.add('email', { nullable: true, unique: true });
 
                 // Create table
                 await table.db.schema
@@ -577,7 +577,7 @@ describe('[target: sql-table.js]', () => {
                     .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
                     .addColumn('name', 'text', (col) => col.notNull())
                     .addColumn('age', 'integer', (col) => col.notNull())
-                    .addColumn('email', 'text')
+                    .addColumn('email', 'text', (col) => col.unique())
                     .execute();
             });
 
@@ -790,6 +790,36 @@ describe('[target: sql-table.js]', () => {
                 const unknownResult = { someProperty: 'value' };
                 const normalized5 = table._normalizeResult(unknownResult);
                 expect(normalized5).toBe(0);
+            });
+
+            it("필수 필드가 누락된 경우 에러가 발생해야 한다", async () => {
+                const invalidData = {
+                    name: 'No Email User'
+                    // email 필드 누락 (nullable: false)
+                };
+
+                await expect(table.insert(invalidData)).rejects.toThrow(/NOT NULL/);
+                // expect(async () => await users.insert(invalidData)).toThrow();
+            });
+
+            it("unique 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
+                const duplicateEmailData = {
+                    email: 'test@example.com', // 이미 존재하는 이메일
+                    name: 'Duplicate Email User',
+                    age: 28,
+                };
+                await table.insert(duplicateEmailData); // 첫 삽입은 성공해야 함
+
+                await expect(table.insert(duplicateEmailData)).rejects.toThrow(/UNIQUE/);
+            });
+
+            it.skip("외래키 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
+                const invalidOrderData = {
+                    user_id: 999, // 존재하지 않는 user_id
+                    amount: 100.00
+                };
+
+                await expect(table.insert(invalidOrderData)).rejects.toThrow();
             });
         });
 
@@ -1162,7 +1192,6 @@ describe('[target: sql-table.js]', () => {
                     set: { email: 'bulk@example.com' },
                     where: { age: ['>=', 30] } // Update rows where age >= 30
                     // where: { age: { '>=': 30 } } // Update rows where age >= 30
-                    // TODO: 객체형식으로 넣는게 더 나을까?
                 };
                 const options = { maxUpdateRows: 10 }; // Allow multiple updates
 
@@ -1177,9 +1206,725 @@ describe('[target: sql-table.js]', () => {
                     expect(row.email).toBe('bulk@example.com');
                 });
             });
+            
         });
 
-        
+        describe('select() method tests', () => {
+            let table;
+            let conn;
+
+            beforeEach(async () => {
+                table = new SQLTable('test_person');
+                conn = {
+                    dialect: new SqliteDialect({
+                    database: new Database(':memory:')
+                    })
+                };
+                table.connect = conn;
+                await table.init();
+
+                // Setup columns
+                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
+                table.columns.add('name', { nullable: false });
+                table.columns.add('age', { nullable: false });
+                table.columns.add('email', { nullable: true });
+                table.columns.add('department', { nullable: true });
+
+                // Create table
+                await table.db.schema
+                    .createTable('test_person')
+                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+                    .addColumn('name', 'text', (col) => col.notNull())
+                    .addColumn('age', 'integer', (col) => col.notNull())
+                    .addColumn('email', 'text')
+                    .addColumn('department', 'text')
+                    .execute();
+
+                // Insert test data
+                await table.db.insertInto('test_person')
+                    .values([
+                    { name: '홍길동', age: 30, email: 'hong@test.com', department: 'IT' },
+                    { name: '김로직', age: 40, email: 'kim@test.com', department: 'HR' },
+                    { name: '이순신', age: 50, email: 'lee@test.com', department: 'IT' },
+                    { name: '강감찬', age: 35, email: 'kang@test.com', department: 'Finance' },
+                    { name: '세종대왕', age: 45, email: 'sejong@test.com', department: 'IT' },
+                    { name: '정약용', age: 55, email: 'jung@test.com', department: 'HR' },
+                    { name: '신사임당', age: 48, email: 'shin@test.com', department: 'Finance' }
+                    ])
+                    .execute();
+            });
+
+            afterEach(async () => {
+                await table.db.destroy();
+            });
+
+            it('기본 선택 조건으로 모든 행을 조회해야 함', async () => {
+                const selectOpt = { page: 1, size: 10 };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(7);
+                expect(result[0]).toHaveProperty('id');
+                expect(result[0]).toHaveProperty('name');
+                expect(result[0]).toHaveProperty('age');
+                expect(result[0]).toHaveProperty('email');
+                expect(result[0]).toHaveProperty('department');
+            });
+
+            it('페이지네이션을 올바르게 처리해야 함', async () => {
+                const selectOpt1 = { page: 1, size: 3 };
+                const result1 = await table.select(selectOpt1, {});
+
+                expect(result1.length).toBe(3);
+
+                const selectOpt2 = { page: 2, size: 3 };
+                const result2 = await table.select(selectOpt2, {});
+
+                expect(result2.length).toBe(3);
+
+                const selectOpt3 = { page: 3, size: 3 };
+                const result3 = await table.select(selectOpt3, {});
+
+                expect(result3.length).toBe(1); // Last page with remaining row
+            });
+
+            it('WHERE 조건으로 특정 행을 조회해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { department: 'IT' }
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(3);
+                result.forEach(row => {
+                    expect(row.department).toBe('IT');
+                });
+            });
+
+            it('복합 WHERE 조건을 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { department: 'IT', age: 30 }
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(1);
+                expect(result[0].name).toBe('홍길동');
+                expect(result[0].department).toBe('IT');
+                expect(result[0].age).toBe(30);
+            });
+
+            it('특정 컬럼만 선택해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    select: ['name', 'age']
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(7);
+                expect(result[0]).toHaveProperty('name');
+                expect(result[0]).toHaveProperty('age');
+                expect(result[0]).not.toHaveProperty('email');
+                expect(result[0]).not.toHaveProperty('department');
+            });
+
+            it('ORDER BY를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    orderBy: { age: 'asc' }
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(7);
+                expect(result[0].age).toBeLessThanOrEqual(result[1].age);
+                expect(result[1].age).toBeLessThanOrEqual(result[2].age);
+                expect(result[0].name).toBe('홍길동'); // age 30, youngest
+            });
+
+            it('DESC ORDER BY를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    orderBy: { age: 'desc' }
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(7);
+                expect(result[0].age).toBeGreaterThanOrEqual(result[1].age);
+                expect(result[1].age).toBeGreaterThanOrEqual(result[2].age);
+                expect(result[0].name).toBe('정약용'); // age 55, oldest
+            });
+
+            it('GROUP BY를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    select: ['department'],
+                    groupBy: ['department']
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(3); // IT, HR, Finance
+                const departments = result.map(row => row.department).sort();
+                expect(departments).toEqual(['Finance', 'HR', 'IT']);
+            });
+
+            it('HAVING 조건을 올바르게 처리해야 함', async () => {
+                // Insert additional test data to make HAVING meaningful
+                await table.db.insertInto('test_person')
+                    .values([
+                    { name: '추가1', age: 25, email: 'add1@test.com', department: 'IT' },
+                    { name: '추가2', age: 26, email: 'add2@test.com', department: 'IT' }
+                    ])
+                    .execute();
+
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    select: ['department'],
+                    groupBy: ['department'],
+                    having: [{ col: 'department', op: '=', val: 'IT' }]
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(1);
+                expect(result[0].department).toBe('IT');
+            });
+
+            it('트랜잭션과 함께 조회해야 함', async () => {
+            await table.db.transaction().execute(async (trx) => {
+                const selectOpt = { page: 1, size: 5 };
+                const options = { trx };
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(5);
+                expect(result[0]).toHaveProperty('name');
+            });
+            });
+
+            it('dryRun=true일 때 컴파일된 SQL을 반환해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { age: 30 }
+                };
+                const options = { dryRun: true };
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result).toHaveProperty('sql');
+                expect(result.sql).toContain('select');
+                expect(result.sql).toContain('from');
+                expect(result.sql).toContain('test_person');
+                expect(result.sql).toContain('where');
+            });
+
+            it('maxSelectRows 제한을 올바르게 처리해야 함', async () => {
+                const selectOpt = { page: 1, size: 10 };
+                const options = { maxSelectRows: 3 };
+
+                await expect(table.select(selectOpt, options)).rejects.toThrow(
+                    'affectedRows 7 exceeds limit 3'
+                );
+            });
+
+            it('fillRows=true일 때 테이블 rows에 데이터를 추가해야 함', async () => {
+                const initialRowCount = table.rows.count;
+                
+                const selectOpt = { page: 1, size: 3 };
+                const options = { fillRows: true };
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(3);
+                expect(table.rows.count).toBe(initialRowCount + 3);
+                expect(table.getChanges().length).toBe(3); // New rows should be tracked as changes
+            });
+
+            it('조회 전후 이벤트를 발생시켜야 함', async () => {
+                const selectingHandler = jest.fn();
+                const selectedHandler = jest.fn();
+
+                table.onSelecting(selectingHandler);
+                table.onSelected(selectedHandler);
+
+                const selectOpt = { page: 1, size: 5 };
+                const options = {};
+
+                await table.select(selectOpt, options);
+
+                expect(selectingHandler).toHaveBeenCalledWith({
+                    table: table,
+                    db: expect.any(Object),
+                    options: expect.objectContaining({ trx: expect.any(Object) })
+                });
+
+                expect(selectedHandler).toHaveBeenCalledWith({
+                    table: table,
+                    db: expect.any(Object),
+                    options: expect.objectContaining({})
+                });
+            });
+
+            it('DISTINCT 옵션을 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    select: ['department'],
+                    distinct: true
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(3); // IT, HR, Finance
+                const uniqueDepartments = [...new Set(result.map(row => row.department))];
+                expect(uniqueDepartments.length).toBe(3);
+            });
+
+            it('selectBuilder 메서드가 올바른 빌더를 반환해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 5,
+                    where: { department: 'IT' },
+                    orderBy: { age: 'asc' }
+                };
+                const options = { trx: table.db };
+
+                const builder = table.selectBuilder(selectOpt, options);
+
+                expect(builder).toBeDefined();
+                expect(typeof builder.execute).toBe('function');
+
+                const compiled = builder.compile();
+                expect(compiled.sql).toContain('select');
+                expect(compiled.sql).toContain('from');
+                expect(compiled.sql).toContain('test_person');
+            });
+
+            it('빈 WHERE 조건을 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: {}
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(7); // All rows should be returned
+            });
+
+            it('존재하지 않는 컬럼은 WHERE에서 무시해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: {
+                    department: 'IT',
+                    nonExistentColumn: 'test'
+                    }
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(3); // Only department filter should apply
+                result.forEach(row => {
+                    expect(row.department).toBe('IT');
+                });
+            });
+
+            it('LIMIT과 OFFSET을 올바르게 계산해야 함', async () => {
+                const selectOpt1 = { page: 1, size: 2 }; // LIMIT 2 OFFSET 0
+                const result1 = await table.select(selectOpt1, {});
+                expect(result1.length).toBe(2);
+
+                const selectOpt2 = { page: 3, size: 2 }; // LIMIT 2 OFFSET 4
+                const result2 = await table.select(selectOpt2, {});
+                expect(result2.length).toBe(2);
+
+                const selectOpt3 = { page: 4, size: 2 }; // LIMIT 2 OFFSET 6
+                const result3 = await table.select(selectOpt3, {});
+                expect(result3.length).toBe(1); // Only 1 row remaining
+            });
+
+            it('size가 0일 때 기본값 10을 사용해야 함', async () => {
+                const selectOpt = { page: 1, size: 0 };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(7); // All 7 rows (less than default 10)
+            });
+
+            it('page가 1보다 작을 때 OFFSET 0을 사용해야 함', async () => {
+                const selectOpt = { page: 0, size: 3 };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(3); // First 3 rows
+            });
+
+            it('복합 ORDER BY를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    orderBy: { department: 'asc', age: 'desc' }
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(7);
+                
+                // Check that Finance comes first, then HR, then IT
+                const financeRows = result.filter(row => row.department === 'Finance');
+                const hrRows = result.filter(row => row.department === 'HR');
+                const itRows = result.filter(row => row.department === 'IT');
+                
+                expect(financeRows.length).toBeGreaterThan(0);
+                expect(hrRows.length).toBeGreaterThan(0);
+                expect(itRows.length).toBeGreaterThan(0);
+            });
+
+            it('MSSQL에서 OFFSET 사용 시 ORDER BY가 자동으로 추가되어야 함', async () => {
+                // Mock MSSQL vendor
+                table.profile.vendor = 'mssql';
+
+                const selectOpt = {
+                    page: 2,
+                    size: 3
+                    // No orderBy specified
+                };
+                const options = { trx: table.db };
+
+                const builder = table.selectBuilder(selectOpt, options);
+                const compiled = builder.compile();
+
+                expect(compiled.sql).toContain('order by');
+            });
+
+            it('$getColumns 메서드를 올바르게 사용해야 함', async () => {
+                const selectData = ['name', 'age', 'invalidColumn'];
+
+                const processedData = table.$getColumns(selectData, 'data');
+
+                expect(processedData).toHaveProperty('name');
+                expect(processedData).toHaveProperty('age');
+                expect(processedData).not.toHaveProperty('invalidColumn');
+            });
+
+            it('결과를 올바르게 정규화해야 함', () => {
+                // Test array result (most common for SELECT)
+                const arrayResult = [
+                    { id: 1, name: '홍길동' },
+                    { id: 2, name: '김로직' }
+                ];
+                const normalized1 = table._normalizeResult(arrayResult);
+                expect(normalized1).toBe(2);
+
+                // Test empty array
+                const emptyResult = [];
+                const normalized2 = table._normalizeResult(emptyResult);
+                expect(normalized2).toBe(0);
+            });
+
+            it('빈 SELECT 배열일 때 모든 컬럼을 선택해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 1,
+                    select: []
+                };
+                const options = {};
+
+                const result = await table.select(selectOpt, options);
+
+                expect(result.length).toBe(1);
+                expect(result[0]).toHaveProperty('id');
+                expect(result[0]).toHaveProperty('name');
+                expect(result[0]).toHaveProperty('age');
+                expect(result[0]).toHaveProperty('email');
+                expect(result[0]).toHaveProperty('department');
+            });
+
+            it('오류 발생 시 적절한 예외를 던져야 함', async () => {
+                // Mock an error by providing invalid table reference
+                const originalTableName = table.tableName;
+                table._name = 'non_existent_table';
+
+                const selectOpt = { page: 1, size: 10 };
+                const options = {};
+
+                await expect(table.select(selectOpt, options)).rejects.toThrow();
+
+                // Restore original table name
+                table._name = originalTableName;
+            });
+            it('WHERE 조건에서 비교 연산자를 올바르게 처리해야 함', async () => {
+                // Greater than or equal
+                const selectOpt1 = {
+                    page: 1,
+                    size: 10,
+                    where: { age: { '>=': 40 } }
+                };
+                const result1 = await table.select(selectOpt1, {});
+                expect(result1.length).toBe(5); // ages: 40, 50, 45, 55, 48
+                result1.forEach(row => {
+                    expect(row.age).toBeGreaterThanOrEqual(40);
+                });
+
+                // Greater than
+                const selectOpt2 = {
+                    page: 1,
+                    size: 10,
+                    where: { age: { '>': 45 } }
+                };
+                const result2 = await table.select(selectOpt2, {});
+                expect(result2.length).toBe(3); // ages: 50, 55, 48
+                result2.forEach(row => {
+                    expect(row.age).toBeGreaterThan(45);
+                });
+
+                // Less than
+                const selectOpt3 = {
+                    page: 1,
+                    size: 10,
+                    where: { age: { '<': 40 } }
+                };
+                const result3 = await table.select(selectOpt3, {});
+                expect(result3.length).toBe(2); // ages: 30, 35
+                result3.forEach(row => {
+                    expect(row.age).toBeLessThan(40);
+                });
+
+                // Less than or equal
+                const selectOpt4 = {
+                    page: 1,
+                    size: 10,
+                    where: { age: { '<=': 35 } }
+                };
+                const result4 = await table.select(selectOpt4, {});
+                expect(result4.length).toBe(2); // ages: 30, 35
+                result4.forEach(row => {
+                    expect(row.age).toBeLessThanOrEqual(35);
+                });
+            });
+
+            it('WHERE 조건에서 IN 연산자를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        department: { 'in': ['IT', 'HR'] }
+                    }
+                };
+                const result = await table.select(selectOpt, {});
+                
+                expect(result.length).toBe(5); // 3 IT + 2 HR
+                result.forEach(row => {
+                    expect(['IT', 'HR']).toContain(row.department);
+                });
+
+                // Test with age values
+                const selectOpt2 = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        age: { 'in': [30, 40, 50] }
+                    }
+                };
+                const result2 = await table.select(selectOpt2, {});
+                
+                expect(result2.length).toBe(3); // ages: 30, 40, 50
+                result2.forEach(row => {
+                    expect([30, 40, 50]).toContain(row.age);
+                });
+            });
+
+            it('WHERE 조건에서 NOT IN 연산자를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        department: { 'not in': ['Finance'] }
+                    }
+                };
+                const result = await table.select(selectOpt, {});
+                
+                expect(result.length).toBe(5); // All except Finance (2)
+                result.forEach(row => {
+                    expect(row.department).not.toBe('Finance');
+                });
+            });
+
+            it('WHERE 조건에서 BETWEEN 연산자를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        age: { 'between': [35, 50] }
+                    }
+                };
+                const result = await table.select(selectOpt, {});
+                
+                expect(result.length).toBe(5); // ages: 35, 40, 45, 48, 50
+                result.forEach(row => {
+                    expect(row.age).toBeGreaterThanOrEqual(35);
+                    expect(row.age).toBeLessThanOrEqual(50);
+                });
+            });
+
+            it('WHERE 조건에서 NOT BETWEEN 연산자를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        age: { 'not between': [35, 50] }
+                    }
+                };
+                const result = await table.select(selectOpt, {});
+                
+                expect(result.length).toBe(2); // ages: 30, 55
+                result.forEach(row => {
+                    expect(row.age < 35 || row.age > 50).toBe(true);
+                });
+            });
+
+            it('WHERE 조건에서 LIKE 연산자를 올바르게 처리해야 함', async () => {
+                const selectOpt1 = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        name: { 'like': '%길%' }
+                    }
+                };
+                const result1 = await table.select(selectOpt1, {});
+                
+                expect(result1.length).toBe(1); // 홍길동
+                expect(result1[0].name).toBe('홍길동');
+
+                // Test email domain
+                const selectOpt2 = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        email: { 'like': '%@test.com' }
+                    }
+                };
+                const result2 = await table.select(selectOpt2, {});
+                
+                expect(result2.length).toBe(7); // All emails end with @test.com
+                result2.forEach(row => {
+                    expect(row.email).toMatch(/@test\.com$/);
+                });
+            });
+
+            it('WHERE 조건에서 복합 연산자를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        age: { '>=': 40 },
+                        department: { 'in': ['IT', 'HR'] },
+                        name: { 'like': '%' }
+                    }
+                };
+                const result = await table.select(selectOpt, {});
+                
+                expect(result.length).toBe(4); // IT: 이순신(50), 세종대왕(45) + HR: 김로직(40), 정약용(55)
+                result.forEach(row => {
+                    expect(row.age).toBeGreaterThanOrEqual(40);
+                    expect(['IT', 'HR']).toContain(row.department);
+                });
+            });
+
+            it('WHERE 조건에서 IS NULL과 IS NOT NULL을 올바르게 처리해야 함', async () => {
+                // First, insert a row with null email
+                await table.db.insertInto('test_person')
+                    .values({ name: '테스트', age: 25, email: null, department: 'Test' })
+                    .execute();
+
+                // Test IS NULL
+                const selectOpt1 = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        email: { 'is': null }
+                    }
+                };
+                const result1 = await table.select(selectOpt1, {});
+                
+                expect(result1.length).toBe(1);
+                expect(result1[0].email).toBeNull();
+
+                // Test IS NOT NULL
+                const selectOpt2 = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        email: { 'is not': null }
+                    }
+                };
+                const result2 = await table.select(selectOpt2, {});
+                
+                expect(result2.length).toBe(7); // All original rows have non-null emails
+                result2.forEach(row => {
+                    expect(row.email).not.toBeNull();
+                });
+            });
+
+            it('WHERE 조건에서 NOT EQUAL 연산자를 올바르게 처리해야 함', async () => {
+                const selectOpt = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        department: { '!=': 'IT' }
+                    }
+                };
+                const result = await table.select(selectOpt, {});
+                
+                expect(result.length).toBe(4); // All except IT (3)
+                result.forEach(row => {
+                    expect(row.department).not.toBe('IT');
+                });
+
+                // Alternative syntax
+                const selectOpt2 = {
+                    page: 1,
+                    size: 10,
+                    where: { 
+                        department: { '<>': 'HR' }
+                    }
+                };
+                const result2 = await table.select(selectOpt2, {});
+                
+                expect(result2.length).toBe(5); // All except HR (2)
+                result2.forEach(row => {
+                    expect(row.department).not.toBe('HR');
+                });
+            });
+        });
     });
 });
 
