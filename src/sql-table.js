@@ -346,8 +346,6 @@ class SQLTable extends MetaTable {
         const tableName = this._name;
 
         for (const item of trans) {
-            // const pk = 'id';
-            // const { [pk]: id, ...changes } = row.ref;
             const row = item.ref;
             if (item.cmd === 'I') {
                 await this.insert(row);
@@ -388,7 +386,7 @@ class SQLTable extends MetaTable {
         builders.push(...this.$createStage2_FKs(db));
         builders.push(...this.$createStage3_Indexes(db));
         return builders;
-    }
+    }    
 
     async _create(p_options) {
         const db = p_options.trx;
@@ -421,7 +419,7 @@ class SQLTable extends MetaTable {
             throw error;
         }
     }
-
+    
     /* ============================================================
     * 3-Stage DDL: Stage1 → Stage2 → Stage3
     *   Stage1: 테이블 + 컬럼 + (복합)PK + UNIQUE  (+ SQLite는 FK까지)
