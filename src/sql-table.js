@@ -718,7 +718,7 @@ class SQLTable extends MetaTable {
     
     async _select(p_select, p_options) {
         const db = p_options.trx;
-        const safe = { maxSelectRows: 100, dryRun: false, fillRows: false, ...p_options };
+        const safe = { maxSelectRows: 100, dryRun: false, fillRows: true, clearRows: true, ...p_options };
 
         await this._event.emit('selecting', { table: this, db: db, options: p_options });
 
@@ -732,6 +732,10 @@ class SQLTable extends MetaTable {
             const result = await builder.execute();
             // const normalized = this._normalizeUpdateResult(result);
 
+            if (safe.clearRows === true) {
+                this.rows.clear();
+            }
+            
             if (safe.fillRows === true) {
                 result.forEach(row => {
                     this.rows.add(row);

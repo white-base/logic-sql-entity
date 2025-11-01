@@ -205,7 +205,7 @@ describe('[target: sql-table.js]', () => {
             expect(rows2[0].name).toBe('홍길동2');
             expect(rows2[0].age).toBe(32);
 
-            const rows3 = await table.select({ page: 1, size: 10 }, { fillRows: true });
+            const rows3 = await table.select({ page: 1, size: 10 }, { clearRows: false });
 
             expect(rows3.length).toBe(3);
             expect(table.getChanges().length).toBe(3);
