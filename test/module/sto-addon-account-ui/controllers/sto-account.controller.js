@@ -9,7 +9,7 @@ export const list = async (req, res, option) => {
     const basePath = req.baseUrl || '';
 
     table.clear();
-    await table.select({ page, size }, { fillRows: true });
+    await table.select({ page, size });
 
     res.render('sto-account/list', {
         title: 'Account List',
@@ -23,7 +23,7 @@ export const form = async (req, res, option) => {
     const basePath = req.baseUrl || '';
 
     store.clear();
-    await store.select({ where: { use_yn: 'Y' } }, { fillRows: true });
+    await store.select({ where: { use_yn: 'Y' } });
 
     res.render('sto-account/form', {
         title: 'Account Add',
@@ -40,7 +40,7 @@ export const detail = async (req, res, option) => {
 
     table.clear();
     // await table.select(1, 1, { acc_idx });
-    await table.select({ where: acc_idx }, { fillRows: true });
+    await table.select({ where: acc_idx });
 
     res.render('sto-account/detail', {
         title: 'Account View',

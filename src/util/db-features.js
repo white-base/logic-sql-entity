@@ -13,8 +13,6 @@ const defaultFeatureSet = {
   supportsOffsetFetch: false  // DML OFFSET ... FETCH ... (MSSQL)
 };
 
-
-
 function mergeFeatures(vendorFeatures) {
   return { ...defaultFeatureSet, ...vendorFeatures };
 }

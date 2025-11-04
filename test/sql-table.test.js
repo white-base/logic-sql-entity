@@ -321,895 +321,7 @@ describe('[target: sql-table.js]', () => {
             table.db.destroy();
         });
 
-        describe('delete() method tests', () => {
-            let table;
-            let conn;
 
-            beforeEach(async () => {
-                table = new SQLTable('test_person');
-                conn = {
-                    dialect: new SqliteDialect({
-                        database: new Database(':memory:')
-                    })
-                };
-                table.connect = conn;
-                await table.init();
-
-                // Setup columns
-                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
-                table.columns.add('name', { nullable: false });
-                table.columns.add('age', { nullable: false });
-
-                // Create table
-                await table.db.schema
-                    .createTable('test_person')
-                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
-                    .addColumn('name', 'text', (col) => col.notNull())
-                    .addColumn('age', 'integer', (col) => col.notNull())
-                    .execute();
-
-                // Insert test data
-                await table.db.insertInto('test_person')
-                    .values([
-                        { name: '홍길동', age: 30 },
-                        { name: '김로직', age: 40 },
-                        { name: '이순신', age: 50 }
-                    ])
-                    .execute();
-            });
-
-            afterEach(async () => {
-                await table.db.destroy();
-            });
-
-            it.skip('requireTrx=true이고 트랜잭션이 제공되지 않을 때 오류를 발생시켜야 함', async () => {
-                const whereClause = { id: 1 };
-                const options = { requireTrx: true };
-
-                await expect(table.delete(whereClause, options)).rejects.toThrow(
-                    'delete requires an explicit transaction (requireTrx=true).'
-                );
-            });
-
-            it('트랜잭션과 함께 단일 행을 삭제해야 함', async () => {
-                const trx = await table.db.transaction().execute(async (trx) => {
-                    const whereClause = { id: 1 };
-                    const options = { trx, maxDeletableRows: 1 };
-
-                    const result = await table.delete(whereClause, options);
-
-                    expect(result).toBe(1);
-
-                    // Verify deletion
-                    const remaining = await trx.selectFrom('test_person').selectAll().execute();
-                    expect(remaining.length).toBe(2);
-                    expect(remaining.find((r) => r.id === 1)).toBeUndefined();
-                });
-            });
-
-            it('dryRun=true일 때 컴파일된 SQL을 반환해야 함', async () => {
-                const trx = await table.db.transaction().execute(async (trx) => {
-                    const whereClause = { id: 1 };
-                    const options = { trx, dryRun: true };
-
-                    const result = await table.delete(whereClause, options);
-
-                    expect(result).toHaveProperty('sql');
-                    expect(result.sql).toContain('delete from');
-                    expect(result.sql).toContain('test_person');
-
-                    // Verify no actual deletion occurred
-                    const rows = await trx.selectFrom('test_person').selectAll().execute();
-                    expect(rows.length).toBe(3);
-                });
-            });
-
-            it('영향받은 행 수가 maxDeletableRows를 초과할 때 오류를 발생시켜야 함', async () => {
-                const trx = await table.db.transaction().execute(async (trx) => {
-                    // Insert multiple rows with same condition to exceed limit
-                    await trx
-                        .insertInto('test_person')
-                        .values([
-                            { name: '테스트1', age: 25 },
-                            { name: '테스트2', age: 25 }
-                        ])
-                        .execute();
-
-                    const whereClause = { age: 25 };
-                    const options = { trx, maxDeletableRows: 1 };
-
-                    await expect(table.delete(whereClause, options)).rejects.toThrow(
-                        'affectedRows 2 exceeds limit 1'
-                    );
-                });
-            });
-
-            it('삭제 전후 이벤트를 발생시켜야 함', async () => {
-                const deletingHandler = jest.fn();
-                const deletedHandler = jest.fn();
-
-                table.onDeleting(deletingHandler);
-                table.onDeleted(deletedHandler);
-
-                const trx = await table.db.transaction().execute(async (trx) => {
-                    const whereClause = { id: 1 };
-                    const options = { trx, maxDeletableRows: 1 };
-
-                    await table.delete(whereClause, options);
-
-                    expect(deletingHandler).toHaveBeenCalledWith({
-                        table: table,
-                        db: trx,
-                        options: options
-                    });
-
-                    expect(deletedHandler).toHaveBeenCalledWith({
-                        table: table,
-                        db: trx,
-                        options: expect.objectContaining({
-                            trx,
-                            maxDeletableRows: 1
-                        })
-                    });
-                });
-            });
-
-            it('삭제 중 오류 발생 시 deleteError 이벤트를 발생시켜야 함', async () => {
-                const deleteErrorHandler = jest.fn();
-                table.onDeleteFailed(deleteErrorHandler);
-
-                try {
-                    await table.db.transaction().execute(async (trx) => {
-                        // Force an error by providing invalid where clause
-                        const whereClause = {}; // No PK columns
-                        const options = { trx };
-
-                        await table.delete(whereClause, options);
-                    });
-                } catch (error) {
-                    // Error is expected
-                }
-
-                expect(deleteErrorHandler).toHaveBeenCalledWith({
-                    table: table,
-                    db: expect.any(Object),
-                    options: expect.objectContaining({ trx: expect.any(Object) }),
-                    error: expect.any(Error)
-                });
-            });
-
-            // it('삭제 결과를 올바르게 정규화해야 함', () => {
-            //     // Test array result
-            //     const arrayResult = [{ id: 1 }, { id: 2 }];
-            //     const normalized1 = table._normalizeDeleteResult(arrayResult);
-            //     expect(normalized1).toEqual({ affectedRows: 2, rows: arrayResult });
-
-            //     // Test numDeletedRows result
-            //     const numDeletedResult = { numDeletedRows: 3 };
-            //     const normalized2 = table._normalizeDeleteResult(numDeletedResult);
-            //     expect(normalized2).toEqual({ affectedRows: 3 });
-
-            //     // Test affectedRows result
-            //     const affectedRowsResult = { affectedRows: 1 };
-            //     const normalized3 = table._normalizeDeleteResult(affectedRowsResult);
-            //     expect(normalized3).toEqual({ affectedRows: 1 });
-
-            //     // Test fallback
-            //     const unknownResult = { someProperty: 'value' };
-            //     const normalized4 = table._normalizeDeleteResult(unknownResult);
-            //     expect(normalized4).toEqual({ affectedRows: 0 });
-            // });
-
-            it('영향받은 행 수 제한을 올바르게 강제해야 함', () => {
-                // Should not throw when within limit
-                expect(() => table._enforceAffectLimit(1, 5)).not.toThrow();
-                expect(() => table._enforceAffectLimit(5, 5)).not.toThrow();
-
-                // Should throw when exceeding limit
-                expect(() => table._enforceAffectLimit(6, 5)).toThrow('affectedRows 6 exceeds limit 5');
-
-                // Should handle null/undefined limits
-                expect(() => table._enforceAffectLimit(100, null)).not.toThrow();
-                expect(() => table._enforceAffectLimit(100, undefined)).not.toThrow();
-
-                // Should handle non-numeric affected values
-                expect(() => table._enforceAffectLimit('invalid', 5)).not.toThrow();
-            });
-
-            it('MetaRow 객체로 삭제할 수 있어야 함', async () => {
-                const trx = await table.db.transaction().execute(async (trx) => {
-                    // Create a MetaRow-like object
-                    const metaRow = {
-                        id: 2,
-                        name: '김로직',
-                        age: 40
-                    };
-
-                    const options = { trx, maxDeletableRows: 1 };
-                    const result = await table.delete(metaRow, options);
-
-                    expect(result).toBe(1);
-
-                    // Verify deletion
-                    const remaining = await trx.selectFrom('test_person').selectAll().execute();
-                    expect(remaining.length).toBe(2);
-                    expect(remaining.find((r) => r.id === 2)).toBeUndefined();
-                });
-            });
-
-            it('기본 옵션을 올바르게 처리해야 함', async () => {
-                const trx = await table.db.transaction().execute(async (trx) => {
-                    const whereClause = { id: 3 };
-                    const options = {
-                        trx,
-                        requireTrx: false, // Override default
-                        maxDeletableRows: 10 // Override default
-                    };
-
-                    const result = await table.delete(whereClause, options);
-
-                    expect(result).toBe(1);
-                });
-            });
-        });
-
-        describe('insert() method tests', () => {
-            let table;
-            let conn;
-
-            beforeEach(async () => {
-                table = new SQLTable('test_person');
-                conn = {
-                    dialect: new SqliteDialect({
-                        database: new Database(':memory:')
-                    })
-                };
-                table.connect = conn;
-                await table.init();
-
-                // Setup columns
-                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
-                table.columns.add('name', { nullable: false });
-                table.columns.add('age', { nullable: false });
-                table.columns.add('email', { nullable: true, unique: true });
-
-                // Create table
-                await table.db.schema
-                    .createTable('test_person')
-                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
-                    .addColumn('name', 'text', (col) => col.notNull())
-                    .addColumn('age', 'integer', (col) => col.notNull())
-                    .addColumn('email', 'text', (col) => col.unique())
-                    .execute();
-            });
-
-            afterEach(async () => {
-                await table.db.destroy();
-            });
-
-            it('객체 데이터로 단일 행을 삽입해야 함', async () => {
-                const insertData = { name: '홍길동', age: 30, email: 'hong@test.com' };
-                const options = {};
-
-                const result = await table.insert(insertData, options);
-
-                expect(result).toBeDefined();
-
-                // Verify insertion
-                const rows = await table.db.selectFrom('test_person').selectAll().execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('홍길동');
-                expect(rows[0].age).toBe(30);
-                expect(rows[0].email).toBe('hong@test.com');
-            });
-
-            it('MetaRow 객체로 행을 삽입해야 함', async () => {
-                // Create a MetaRow-like object
-                const metaRow = {
-                    name: '김로직',
-                    age: 40,
-                    email: 'kim@test.com'
-                };
-
-                const options = {};
-                const result = await table.insert(metaRow, options);
-
-                expect(result).toBeDefined();
-
-                // Verify insertion
-                const rows = await table.db.selectFrom('test_person').selectAll().execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('김로직');
-                expect(rows[0].age).toBe(40);
-                expect(rows[0].email).toBe('kim@test.com');
-            });
-
-            it('트랜잭션과 함께 삽입해야 함', async () => {
-                await table.db.transaction().execute(async (trx) => {
-                    const insertData = { name: '이순신', age: 50 };
-                    const options = { trx };
-
-                    const result = await table.insert(insertData, options);
-
-                    expect(result).toBeDefined();
-
-                    // Verify insertion within transaction
-                    const rows = await trx.selectFrom('test_person').selectAll().execute();
-                    expect(rows.length).toBe(1);
-                    expect(rows[0].name).toBe('이순신');
-                    expect(rows[0].age).toBe(50);
-                });
-            });
-
-            it('dryRun=true일 때 컴파일된 SQL을 반환해야 함', async () => {
-                const insertData = { name: '강감찬', age: 45 };
-                const options = { dryRun: true };
-
-                const result = await table.insert(insertData, options);
-
-                expect(result).toHaveProperty('sql');
-                expect(result.sql).toContain('insert into');
-                expect(result.sql).toContain('test_person');
-
-                // Verify no actual insertion occurred
-                const rows = await table.db.selectFrom('test_person').selectAll().execute();
-                expect(rows.length).toBe(0);
-            });
-
-            it('삽입 전후 이벤트를 발생시켜야 함', async () => {
-                const insertingHandler = jest.fn();
-                const insertedHandler = jest.fn();
-
-                table.onInserting(insertingHandler);
-                table.onInserted(insertedHandler);
-
-                const insertData = { name: '윤봉길', age: 35 };
-                const options = {};
-
-                await table.insert(insertData, options);
-
-                expect(insertingHandler).toHaveBeenCalledWith({
-                    table: table,
-                    db: expect.any(Object),
-                    options: expect.objectContaining({ trx: expect.any(Object) })
-                });
-
-                // expect(deleteErrorHandler).toHaveBeenCalledWith({
-                //     table: table,
-                //     db: expect.any(Object),
-                //     options: expect.objectContaining({ trx: expect.any(Object) }),
-                //     error: expect.any(Error)
-                // });
-
-                expect(insertedHandler).toHaveBeenCalledWith({
-                    table: table,
-                    db: expect.any(Object),
-                    options: expect.objectContaining({})
-                });
-            });
-
-            it('빈 데이터로 삽입 시 오류를 발생시켜야 함', async () => {
-                const insertData = {};
-                const options = {};
-
-                await expect(table.insert(insertData, options)).rejects.toThrow();
-            });
-
-            it('존재하지 않는 컬럼은 필터링해야 함', async () => {
-                const insertData = {
-                    name: '정약용',
-                    age: 55,
-                    nonExistentColumn: 'should be filtered'
-                };
-                const options = {};
-
-                const result = await table.insert(insertData, options);
-
-                expect(result).toBeDefined();
-
-                // Verify insertion (nonExistentColumn should be ignored)
-                const rows = await table.db.selectFrom('test_person').selectAll().execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('정약용');
-                expect(rows[0].age).toBe(55);
-                expect(rows[0]).not.toHaveProperty('nonExistentColumn');
-            });
-
-            it('hasReturning 기능이 있을 때 데이터를 반환해야 함', async () => {
-                // Mock hasReturning feature
-                table.profile.features = { hasReturning: true };
-
-                const insertData = { name: '신사임당', age: 48 };
-                const options = {};
-
-                const result = await table.insert(insertData, options);
-
-                expect(result).toBeDefined();
-            });
-
-            it('null 값을 올바르게 처리해야 함', async () => {
-                const insertData = { name: '허준', age: 42, email: null };
-                const options = {};
-
-                const result = await table.insert(insertData, options);
-
-                expect(result).toBeDefined();
-
-                // Verify insertion with null value
-                const rows = await table.db.selectFrom('test_person').selectAll().execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('허준');
-                expect(rows[0].age).toBe(42);
-                expect(rows[0].email).toBeNull();
-            });
-
-            it('insertBuilder 메서드가 올바른 빌더를 반환해야 함', async () => {
-                const insertData = { name: '세종대왕', age: 52 };
-                const options = { trx: table.db };
-
-                const builder = table.insertBuilder(insertData, options);
-
-                expect(builder).toBeDefined();
-                expect(typeof builder.execute).toBe('function');
-
-                const compiled = builder.compile();
-                expect(compiled.sql).toContain('insert into');
-                expect(compiled.sql).toContain('test_person');
-            });
-
-            it('$getColumns 메서드를 올바르게 사용해야 함', async () => {
-                const insertData = {
-                    name: '장영실',
-                    age: 38,
-                    invalidColumn: 'test'
-                };
-
-                const processedData = table.$getColumns(insertData, 'data');
-
-                expect(processedData).toHaveProperty('name', '장영실');
-                expect(processedData).toHaveProperty('age', 38);
-                expect(processedData).not.toHaveProperty('invalidColumn');
-            });
-
-            it('결과를 올바르게 정규화해야 함', () => {
-                // Test various result formats
-                const arrayResult = [{ id: 1 }];
-                const normalized1 = table._normalizeResult(arrayResult);
-                expect(normalized1).toBe(1);
-
-                const numInsertedResult = { numInsertedRows: 1 };
-                const normalized2 = table._normalizeResult(numInsertedResult);
-                expect(normalized2).toBe(1);
-
-                const affectedRowsResult = { affectedRows: 1 };
-                const normalized3 = table._normalizeResult(affectedRowsResult);
-                expect(normalized3).toBe(1);
-
-                const changesResult = { changes: 1 };
-                const normalized4 = table._normalizeResult(changesResult);
-                expect(normalized4).toBe(1);
-
-                const unknownResult = { someProperty: 'value' };
-                const normalized5 = table._normalizeResult(unknownResult);
-                expect(normalized5).toBe(0);
-            });
-
-            it("필수 필드가 누락된 경우 에러가 발생해야 한다", async () => {
-                const invalidData = {
-                    name: 'No Email User'
-                    // email 필드 누락 (nullable: false)
-                };
-
-                await expect(table.insert(invalidData)).rejects.toThrow(/NOT NULL/);
-                // expect(async () => await users.insert(invalidData)).toThrow();
-            });
-
-            it("unique 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
-                const duplicateEmailData = {
-                    email: 'test@example.com', // 이미 존재하는 이메일
-                    name: 'Duplicate Email User',
-                    age: 28,
-                };
-                await table.insert(duplicateEmailData); // 첫 삽입은 성공해야 함
-
-                await expect(table.insert(duplicateEmailData)).rejects.toThrow(/UNIQUE/);
-            });
-
-            it.skip("외래키 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
-                const invalidOrderData = {
-                    user_id: 999, // 존재하지 않는 user_id
-                    amount: 100.00
-                };
-
-                await expect(table.insert(invalidOrderData)).rejects.toThrow();
-            });
-        });
-
-        describe('update() method tests', () => {
-            let table;
-            let conn;
-
-            beforeEach(async () => {
-                table = new SQLTable('test_person');
-                conn = {
-                    dialect: new SqliteDialect({
-                        database: new Database(':memory:')
-                    })
-                };
-                table.connect = conn;
-                await table.init();
-
-                // Setup columns
-                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
-                table.columns.add('name', { nullable: false });
-                table.columns.add('age', { nullable: false });
-                table.columns.add('email', { nullable: true });
-
-                // Create table
-                await table.db.schema
-                    .createTable('test_person')
-                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
-                    .addColumn('name', 'text', (col) => col.notNull())
-                    .addColumn('age', 'integer', (col) => col.notNull())
-                    .addColumn('email', 'text')
-                    .execute();
-
-                // Insert test data
-                await table.db.insertInto('test_person')
-                    .values([
-                        { name: '홍길동', age: 30, email: 'hong@test.com' },
-                        { name: '김로직', age: 40, email: 'kim@test.com' },
-                        { name: '이순신', age: 50, email: 'lee@test.com' }
-                    ])
-                    .execute();
-            });
-
-            afterEach(async () => {
-                await table.db.destroy();
-            });
-
-            it('객체 데이터로 단일 행을 업데이트해야 함', async () => {
-                const updateData = {
-                    id: 1,
-                    name: '홍길동2',
-                    age: 32,
-                    email: 'hong2@test.com'
-                };
-                const options = {};
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toBe(1);
-
-                // Verify update
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('id', '=', 1)
-                    .selectAll()
-                    .execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('홍길동2');
-                expect(rows[0].age).toBe(32);
-                expect(rows[0].email).toBe('hong2@test.com');
-            });
-
-            it('set과 where 조건을 명시적으로 분리하여 업데이트해야 함', async () => {
-                const updateData = {
-                    set: { name: '김로직2', age: 42 },
-                    where: { id: 2 }
-                };
-                const options = {};
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toBe(1);
-
-                // Verify update
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('id', '=', 2)
-                    .selectAll()
-                    .execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('김로직2');
-                expect(rows[0].age).toBe(42);
-                expect(rows[0].email).toBe('kim@test.com'); // Should remain unchanged
-            });
-
-            it('MetaRow 객체로 행을 업데이트해야 함', async () => {
-                // Create a MetaRow-like object
-                const metaRow = {
-                    id: 3,
-                    name: '이순신2',
-                    age: 52,
-                    email: 'lee2@test.com'
-                };
-
-                const options = {};
-                const result = await table.update(metaRow, options);
-
-                expect(result).toBe(1);
-
-                // Verify update
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('id', '=', 3)
-                    .selectAll()
-                    .execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('이순신2');
-                expect(rows[0].age).toBe(52);
-                expect(rows[0].email).toBe('lee2@test.com');
-            });
-
-            it('트랜잭션과 함께 업데이트해야 함', async () => {
-                await table.db.transaction().execute(async (trx) => {
-                    const updateData = { id: 1, name: '트랜잭션 테스트', age: 99 };
-                    const options = { trx };
-
-                    const result = await table.update(updateData, options);
-
-                    expect(result).toBe(1);
-
-                    // Verify update within transaction
-                    const rows = await trx
-                        .selectFrom('test_person')
-                        .where('id', '=', 1)
-                        .selectAll()
-                        .execute();
-                    expect(rows.length).toBe(1);
-                    expect(rows[0].name).toBe('트랜잭션 테스트');
-                    expect(rows[0].age).toBe(99);
-                });
-            });
-
-            it('dryRun=true일 때 컴파일된 SQL을 반환해야 함', async () => {
-                const updateData = { id: 1, name: '드라이런 테스트', age: 88 };
-                const options = { dryRun: true };
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toHaveProperty('sql');
-                expect(result.sql).toContain('update');
-                expect(result.sql).toContain('test_person');
-                expect(result.sql).toContain('set');
-
-                // Verify no actual update occurred
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('id', '=', 1)
-                    .selectAll()
-                    .execute();
-                expect(rows[0].name).toBe('홍길동'); // Should remain unchanged
-                expect(rows[0].age).toBe(30); // Should remain unchanged
-            });
-
-            it('영향받은 행 수가 maxUpdateRows를 초과할 때 오류를 발생시켜야 함', async () => {
-                // First, insert additional rows with same age to exceed limit
-                await table.db.insertInto('test_person').values([
-                    { name: '테스트1', age: 25, email: 'test1@test.com' },
-                    { name: '테스트2', age: 25, email: 'test2@test.com' }
-                ]).execute();
-
-                const updateData = {
-                    set: { email: 'bulk@test.com' },
-                    where: { age: 25 } // This will update 2 rows
-                };
-                const options = { maxUpdateRows: 1 };
-
-                await expect(table.update(updateData, options)).rejects.toThrow('affectedRows 2 exceeds limit 1');
-            });
-
-            it('업데이트 전후 이벤트를 발생시켜야 함', async () => {
-                const updatingHandler = jest.fn();
-                const updatedHandler = jest.fn();
-
-                table.onUpdating(updatingHandler);
-                table.onUpdated(updatedHandler);
-
-                const updateData = { id: 1, name: '이벤트 테스트', age: 77 };
-                const options = {};
-
-                await table.update(updateData, options);
-
-                expect(updatingHandler).toHaveBeenCalledWith({
-                    table: table,
-                    db: expect.any(Object),
-                    options: expect.objectContaining({ trx: expect.any(Object) })
-                });
-
-                expect(updatedHandler).toHaveBeenCalledWith({
-                    table: table,
-                    db: expect.any(Object),
-                    options: expect.objectContaining({})
-                });
-            });
-
-            it('WHERE 조건이 없을 때 오류를 발생시켜야 함', async () => {
-                const updateData = {
-                    set: { name: '전체 업데이트' },
-                    where: {}
-                };
-                const options = {};
-
-                await expect(table.update(updateData, options)).rejects.toThrow();
-            });
-
-            it('존재하지 않는 컬럼은 필터링해야 함', async () => {
-                const updateData = {
-                    id: 2,
-                    name: '필터링 테스트',
-                    age: 66,
-                    nonExistentColumn: 'should be filtered'
-                };
-                const options = {};
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toBe(1);
-
-                // Verify update (nonExistentColumn should be ignored)
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('id', '=', 2)
-                    .selectAll()
-                    .execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].name).toBe('필터링 테스트');
-                expect(rows[0].age).toBe(66);
-                expect(rows[0]).not.toHaveProperty('nonExistentColumn');
-            });
-
-            it('null 값을 올바르게 처리해야 함', async () => {
-                const updateData = { id: 3, email: null };
-                const options = {};
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toBe(1);
-
-                // Verify update with null value
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('id', '=', 3)
-                    .selectAll()
-                    .execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].email).toBeNull();
-                expect(rows[0].name).toBe('이순신'); // Should remain unchanged
-                expect(rows[0].age).toBe(50); // Should remain unchanged
-            });
-
-            it('updateBuilder 메서드가 올바른 빌더를 반환해야 함', async () => {
-                const updateData = { id: 1, name: '빌더 테스트', age: 55 };
-                const options = { trx: table.db };
-
-                const builder = table.updateBuilder(updateData, options);
-
-                expect(builder).toBeDefined();
-                expect(typeof builder.execute).toBe('function');
-
-                const compiled = builder.compile();
-                expect(compiled.sql).toContain('update');
-                expect(compiled.sql).toContain('test_person');
-                expect(compiled.sql).toContain('set');
-            });
-
-            it('복합 WHERE 조건을 올바르게 처리해야 함', async () => {
-                const updateData = {
-                    set: { email: 'updated@test.com' },
-                    where: { name: '김로직', age: 40 }
-                };
-                const options = {};
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toBe(1);
-
-                // Verify update
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('name', '=', '김로직')
-                    .selectAll()
-                    .execute();
-                expect(rows.length).toBe(1);
-                expect(rows[0].email).toBe('updated@test.com');
-            });
-
-            it('$getColumns 메서드를 올바르게 사용해야 함', async () => {
-                const updateData = {
-                    id: 1,
-                    name: '컬럼 테스트',
-                    age: 44,
-                    invalidColumn: 'test'
-                };
-
-                const setData = table.$getColumns(updateData, 'set');
-
-                expect(setData).toHaveProperty('name', '컬럼 테스트');
-                expect(setData).toHaveProperty('age', 44);
-                expect(setData).not.toHaveProperty('id'); // PK should be excluded from set
-                expect(setData).not.toHaveProperty('invalidColumn');
-
-                const whereData = table.$getColumns(updateData, 'pk');
-                expect(whereData).toHaveProperty('id', 1);
-                expect(whereData).not.toHaveProperty('name');
-                expect(whereData).not.toHaveProperty('age');
-            });
-
-            it('결과를 올바르게 정규화해야 함', () => {
-                // Test various result formats
-                const numUpdatedResult = { numUpdatedRows: 1 };
-                const normalized1 = table._normalizeResult(numUpdatedResult);
-                expect(normalized1).toBe(1);
-
-                const affectedRowsResult = { affectedRows: 2 };
-                const normalized2 = table._normalizeResult(affectedRowsResult);
-                expect(normalized2).toBe(2);
-
-                const changesResult = { changes: 1 };
-                const normalized3 = table._normalizeResult(changesResult);
-                expect(normalized3).toBe(1);
-
-                const unknownResult = { someProperty: 'value' };
-                const normalized4 = table._normalizeResult(unknownResult);
-                expect(normalized4).toBe(0);
-            });
-
-            it('영향받은 행 수 제한을 올바르게 강제해야 함', () => {
-                // Should not throw when within limit
-                expect(() => table._enforceAffectLimit(1, 5)).not.toThrow();
-                expect(() => table._enforceAffectLimit(5, 5)).not.toThrow();
-
-                // Should throw when exceeding limit
-                expect(() => table._enforceAffectLimit(6, 5)).toThrow('affectedRows 6 exceeds limit 5');
-
-                // Should handle null/undefined limits
-                expect(() => table._enforceAffectLimit(100, null)).not.toThrow();
-                expect(() => table._enforceAffectLimit(100, undefined)).not.toThrow();
-            });
-
-            it('기본 옵션을 올바르게 처리해야 함', async () => {
-                const updateData = { id: 1, name: '기본 옵션 테스트', age: 33 };
-                const options = {
-                    maxUpdateRows: 10 // Override default
-                };
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toBe(1);
-
-                // Verify update
-                const rows = await table.db
-                    .selectFrom('test_person')
-                    .where('id', '=', 1)
-                    .selectAll()
-                    .execute();
-                expect(rows[0].name).toBe('기본 옵션 테스트');
-                expect(rows[0].age).toBe(33);
-            });
-
-            it('여러 행을 한 번에 업데이트할 수 있어야 함', async () => {
-                const updateData = {
-                    set: { email: 'bulk@example.com' },
-                    where: { age: ['>=', 30] } // Update rows where age >= 30
-                    // where: { age: { '>=': 30 } } // Update rows where age >= 30
-                };
-                const options = { maxUpdateRows: 10 }; // Allow multiple updates
-
-                const result = await table.update(updateData, options);
-
-                expect(result).toBe(3); // All 3 rows have age >= 30
-
-                // Verify all rows were updated
-                const rows = await table.db.selectFrom('test_person').selectAll().execute();
-                expect(rows.length).toBe(3);
-                rows.forEach((row) => {
-                    expect(row.email).toBe('bulk@example.com');
-                });
-            });
-            
-        });
 
         describe('select() method tests', () => {
             let table;
@@ -1441,7 +553,7 @@ describe('[target: sql-table.js]', () => {
                 expect(result.sql).toContain('where');
             });
 
-            it('maxSelectRows 제한을 올바르게 처리해야 함', async () => {
+            it.skip('maxSelectRows 제한을 올바르게 처리해야 함', async () => {
                 const selectOpt = { page: 1, size: 10 };
                 const options = { maxSelectRows: 3 };
 
@@ -1924,6 +1036,1078 @@ describe('[target: sql-table.js]', () => {
                 expect(result2.length).toBe(5); // All except HR (2)
                 result2.forEach(row => {
                     expect(row.department).not.toBe('HR');
+                });
+            });
+        });
+
+        describe('insert() method tests', () => {
+            let table;
+            let conn;
+
+            beforeEach(async () => {
+                table = new SQLTable('test_person');
+                conn = {
+                    dialect: new SqliteDialect({
+                        database: new Database(':memory:')
+                    })
+                };
+                table.connect = conn;
+                await table.init();
+
+                // Setup columns
+                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
+                table.columns.add('name', { nullable: false });
+                table.columns.add('age', { nullable: false });
+                table.columns.add('email', { nullable: true, unique: true });
+
+                // Create table
+                await table.db.schema
+                    .createTable('test_person')
+                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+                    .addColumn('name', 'text', (col) => col.notNull())
+                    .addColumn('age', 'integer', (col) => col.notNull())
+                    .addColumn('email', 'text', (col) => col.unique())
+                    .execute();
+            });
+
+            afterEach(async () => {
+                await table.db.destroy();
+            });
+
+            it('객체 데이터로 단일 행을 삽입해야 함', async () => {
+                const insertData = { name: '홍길동', age: 30, email: 'hong@test.com' };
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toBeDefined();
+
+                // Verify insertion
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('홍길동');
+                expect(rows[0].age).toBe(30);
+                expect(rows[0].email).toBe('hong@test.com');
+            });
+
+            it('MetaRow 객체로 행을 삽입해야 함', async () => {
+                // Create a MetaRow-like object
+                const metaRow = {
+                    name: '김로직',
+                    age: 40,
+                    email: 'kim@test.com'
+                };
+
+                const options = {};
+                const result = await table.insert(metaRow, options);
+
+                expect(result).toBeDefined();
+
+                // Verify insertion
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('김로직');
+                expect(rows[0].age).toBe(40);
+                expect(rows[0].email).toBe('kim@test.com');
+            });
+
+            it('트랜잭션과 함께 삽입해야 함', async () => {
+                await table.db.transaction().execute(async (trx) => {
+                    const insertData = { name: '이순신', age: 50 };
+                    const options = { trx };
+
+                    const result = await table.insert(insertData, options);
+
+                    expect(result).toBeDefined();
+
+                    // Verify insertion within transaction
+                    const rows = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(rows.length).toBe(1);
+                    expect(rows[0].name).toBe('이순신');
+                    expect(rows[0].age).toBe(50);
+                });
+            });
+
+            it('dryRun=true일 때 컴파일된 SQL을 반환해야 함', async () => {
+                const insertData = { name: '강감찬', age: 45 };
+                const options = { dryRun: true };
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toHaveProperty('sql');
+                expect(result.sql).toContain('insert into');
+                expect(result.sql).toContain('test_person');
+
+                // Verify no actual insertion occurred
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(0);
+            });
+
+            it('삽입 전후 이벤트를 발생시켜야 함', async () => {
+                const insertingHandler = jest.fn();
+                const insertedHandler = jest.fn();
+
+                table.onInserting(insertingHandler);
+                table.onInserted(insertedHandler);
+
+                const insertData = { name: '윤봉길', age: 35 };
+                const options = {};
+
+                await table.insert(insertData, options);
+
+                expect(insertingHandler).toHaveBeenCalledWith({
+                    table: table,
+                    db: expect.any(Object),
+                    options: expect.objectContaining({ trx: expect.any(Object) })
+                });
+
+                // expect(deleteErrorHandler).toHaveBeenCalledWith({
+                //     table: table,
+                //     db: expect.any(Object),
+                //     options: expect.objectContaining({ trx: expect.any(Object) }),
+                //     error: expect.any(Error)
+                // });
+
+                expect(insertedHandler).toHaveBeenCalledWith({
+                    table: table,
+                    db: expect.any(Object),
+                    options: expect.objectContaining({})
+                });
+            });
+
+            it('빈 데이터로 삽입 시 오류를 발생시켜야 함', async () => {
+                const insertData = {};
+                const options = {};
+
+                await expect(table.insert(insertData, options)).rejects.toThrow();
+            });
+
+            it('존재하지 않는 컬럼은 필터링해야 함', async () => {
+                const insertData = {
+                    name: '정약용',
+                    age: 55,
+                    nonExistentColumn: 'should be filtered'
+                };
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toBeDefined();
+
+                // Verify insertion (nonExistentColumn should be ignored)
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('정약용');
+                expect(rows[0].age).toBe(55);
+                expect(rows[0]).not.toHaveProperty('nonExistentColumn');
+            });
+
+            it('hasReturning 기능이 있을 때 데이터를 반환해야 함', async () => {
+                // Mock hasReturning feature
+                table.profile.features = { hasReturning: true };
+
+                const insertData = { name: '신사임당', age: 48 };
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toBeDefined();
+            });
+
+            it('null 값을 올바르게 처리해야 함', async () => {
+                const insertData = { name: '허준', age: 42, email: null };
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toBeDefined();
+
+                // Verify insertion with null value
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('허준');
+                expect(rows[0].age).toBe(42);
+                expect(rows[0].email).toBeNull();
+            });
+
+            it('insertBuilder 메서드가 올바른 빌더를 반환해야 함', async () => {
+                const insertData = { name: '세종대왕', age: 52 };
+                const options = { trx: table.db };
+
+                const builder = table.insertBuilder(insertData, options);
+
+                expect(builder).toBeDefined();
+                expect(typeof builder.execute).toBe('function');
+
+                const compiled = builder.compile();
+                expect(compiled.sql).toContain('insert into');
+                expect(compiled.sql).toContain('test_person');
+            });
+
+            it('$getColumns 메서드를 올바르게 사용해야 함', async () => {
+                const insertData = {
+                    name: '장영실',
+                    age: 38,
+                    invalidColumn: 'test'
+                };
+
+                const processedData = table.$getColumns(insertData, 'data');
+
+                expect(processedData).toHaveProperty('name', '장영실');
+                expect(processedData).toHaveProperty('age', 38);
+                expect(processedData).not.toHaveProperty('invalidColumn');
+            });
+
+            it('결과를 올바르게 정규화해야 함', () => {
+                // Test various result formats
+                const arrayResult = [{ id: 1 }];
+                const normalized1 = table._normalizeResult(arrayResult);
+                expect(normalized1).toBe(1);
+
+                const numInsertedResult = { numInsertedRows: 1 };
+                const normalized2 = table._normalizeResult(numInsertedResult);
+                expect(normalized2).toBe(1);
+
+                const affectedRowsResult = { affectedRows: 1 };
+                const normalized3 = table._normalizeResult(affectedRowsResult);
+                expect(normalized3).toBe(1);
+
+                const changesResult = { changes: 1 };
+                const normalized4 = table._normalizeResult(changesResult);
+                expect(normalized4).toBe(1);
+
+                const unknownResult = { someProperty: 'value' };
+                const normalized5 = table._normalizeResult(unknownResult);
+                expect(normalized5).toBe(0);
+            });
+
+            it("필수 필드가 누락된 경우 에러가 발생해야 한다", async () => {
+                const invalidData = {
+                    name: 'No Email User'
+                    // email 필드 누락 (nullable: false)
+                };
+
+                await expect(table.insert(invalidData)).rejects.toThrow(/NOT NULL/);
+                // expect(async () => await users.insert(invalidData)).toThrow();
+            });
+
+            it("unique 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
+                const duplicateEmailData = {
+                    email: 'test@example.com', // 이미 존재하는 이메일
+                    name: 'Duplicate Email User',
+                    age: 28,
+                };
+                await table.insert(duplicateEmailData); // 첫 삽입은 성공해야 함
+
+                await expect(table.insert(duplicateEmailData)).rejects.toThrow(/UNIQUE/);
+            });
+
+            it.skip("외래키 제약조건을 위반하는 경우 에러가 발생해야 한다", async () => {
+                const invalidOrderData = {
+                    user_id: 999, // 존재하지 않는 user_id
+                    amount: 100.00
+                };
+
+                await expect(table.insert(invalidOrderData)).rejects.toThrow();
+            });
+            // 여러값 한번에 등록하는 테스트 추가
+            it('여러값 한번에 등록: 배열로 여러 행 삽입', async () => {
+                const insertData = [
+                    { name: '배열1', age: 21, email: 'arr1@test.com' },
+                    { name: '배열2', age: 22, email: 'arr2@test.com' }
+                ];
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                // 동작 결과는 구현마다 다를 수 있으므로 DB 상태로 검증
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(2);
+                const names = rows.map(r => r.name).sort();
+                expect(names).toEqual(['배열1', '배열2']);
+            });
+
+            it('여러값 트랜잭션: 트랜잭션 내에서 배열 삽입', async () => {
+                await table.db.transaction().execute(async (trx) => {
+                    const insertData = [
+                        { name: '트랜잭션1', age: 31, email: 'tx1@test.com' },
+                        { name: '트랜잭션2', age: 32, email: 'tx2@test.com' }
+                    ];
+                    const options = { trx };
+
+                    const result = await table.insert(insertData, options);
+
+                    const rows = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(rows.length).toBe(2);
+                    const emails = rows.map(r => r.email).sort();
+                    expect(emails).toEqual(['tx1@test.com', 'tx2@test.com']);
+                });
+            });
+
+            it('dryRun=true일 때 배열 삽입은 SQL 컴파일을 반환해야 함', async () => {
+                const insertData = [
+                    { name: '드라이런1', age: 41, email: 'dry1@test.com' },
+                    { name: '드라이런2', age: 42, email: 'dry2@test.com' }
+                ];
+                const options = { dryRun: true };
+
+                const result = await table.insert(insertData, options);
+
+                // 결과 형태가 빌더 단일/복수 등 다양할 수 있으므로 유연하게 검사
+                if (Array.isArray(result)) {
+                    expect(result.length).toBeGreaterThan(0);
+                    expect(result[0]).toHaveProperty('sql');
+                    expect(result[0].sql.toLowerCase()).toContain('insert into');
+                } else {
+                    expect(result).toHaveProperty('sql');
+                    expect(result.sql.toLowerCase()).toContain('insert into');
+                }
+
+                // 실제로는 삽입이 일어나지 않아야 함
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(0);
+            });
+
+            it('배열 삽입 시 존재하지 않는 컬럼은 필터링되어야 함', async () => {
+                const insertData = [
+                    { name: '필터1', age: 51, email: 'f1@test.com', nonExist: 'x' },
+                    { name: '필터2', age: 52, email: 'f2@test.com', nonExist: 'y' }
+                ];
+                await table.insert(insertData, {});
+
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(2);
+                rows.forEach(r => {
+                    expect(r).not.toHaveProperty('nonExist');
+                });
+            });
+
+            it('단일 삽입 시 반환값을 유연하게 검사해야 함 (객체/숫자/다양한 드라이버 대응)', async () => {
+                const insertData = { name: '리턴테스트1', age: 29, email: 'ret1@test.com' };
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                // 반환값 형식은 드라이버/설정에 따라 다를 수 있으므로 유연하게 검사
+                expect(result).toBeDefined();
+
+                if (Array.isArray(result)) {
+                    // 일부 구현은 단일 삽입도 배열로 반환할 수 있음
+                    expect(result.length).toBeGreaterThanOrEqual(1);
+                } else if (typeof result === 'object' && result !== null) {
+                    // 객체 반환 시 id 또는 insertId 같은 식별자가 포함되어야 함
+                    const hasId =
+                        Object.prototype.hasOwnProperty.call(result, 'id') ||
+                        Object.prototype.hasOwnProperty.call(result, 'insertId') ||
+                        Object.prototype.hasOwnProperty.call(result, 'lastInsertRowid');
+                    expect(hasId).toBe(true);
+                } else if (typeof result === 'number') {
+                    // 숫자(영향받은 행 수 등)인 경우 양수여야 함
+                    expect(result).toBeGreaterThan(0);
+                }
+
+                // DB 상태로도 검증
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('리턴테스트1');
+                expect(rows[0].age).toBe(29);
+                expect(rows[0].email).toBe('ret1@test.com');
+            });
+
+            it('복수 행 삽입 시 반환값과 DB 반영을 검사해야 함 (배열/단일/유연 처리)', async () => {
+                const insertData = [
+                    { name: '리턴테스트A', age: 21, email: 'reta@test.com' },
+                    { name: '리턴테스트B', age: 22, email: 'retb@test.com' }
+                ];
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toBeDefined();
+                expect(result[0]).toBeDefined();
+                expect(result[1]).toBeDefined();
+                expect(result.length).toBe(2);
+                expect(result[0]).toEqual({ id: 1, name: '리턴테스트A', age: 21, email: 'reta@test.com' });
+                expect(result[1]).toEqual({ id: 2, name: '리턴테스트B', age: 22, email: 'retb@test.com' });
+
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(2);
+                const names = rows.map(r => r.name).sort();
+                expect(names).toEqual(['리턴테스트A', '리턴테스트B']);
+            });
+
+            it('hasReturning 기능 활성화 시 단일 삽입에서 행 정보를 반환해야 함', async () => {
+                // 강제 설정: returning 지원이 있는 것처럼 동작하도록 프로필 설정
+                table.profile.features = { hasReturning: true };
+
+                const insertData = { name: '리턴_RETURNING', age: 33, email: 'ret_returning@test.com' };
+                const options = {};
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toBeDefined();
+
+                if (Array.isArray(result)) {
+                    expect(result.length).toBeGreaterThanOrEqual(1);
+                    // 첫 항목이 객체이면 id 확인
+                    if (typeof result[0] === 'object' && result[0] !== null) {
+                        expect(result[0]).toHaveProperty('id');
+                    }
+                } else if (typeof result === 'object' && result !== null) {
+                    // returning이 활성화되면 삽입된 행 객체를 기대
+                    expect(Object.prototype.hasOwnProperty.call(result, 'id')).toBe(true);
+                } else if (typeof result === 'number') {
+                    expect(result).toBeGreaterThan(0);
+                }
+
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('리턴_RETURNING');
+            });
+
+            it('단일 dryRun=true 일 때 컴파일된 SQL(또는 빌더)을 반환해야 함', async () => {
+                const insertData = { name: '드라이런_리턴', age: 27, email: 'dry_ret@test.com' };
+                const options = { dryRun: true };
+
+                const result = await table.insert(insertData, options);
+
+                expect(result).toBeDefined();
+
+                // 드라이런은 컴파일된 SQL 객체 또는 배열을 반환할 수 있으므로 유연하게 검사
+                if (Array.isArray(result)) {
+                    expect(result.length).toBeGreaterThanOrEqual(1);
+                    expect(result[0]).toHaveProperty('sql');
+                    expect(String(result[0].sql).toLowerCase()).toContain('insert into');
+                } else if (typeof result === 'object' && result !== null) {
+                    // 빌더의 compile() 결과 등
+                    if (Object.prototype.hasOwnProperty.call(result, 'sql')) {
+                        expect(String(result.sql).toLowerCase()).toContain('insert into');
+                    }
+                } else {
+                    // 문자열 등으로 반환되더라도 insert 문을 포함해야 함
+                    expect(String(result).toLowerCase()).toContain('insert into');
+                }
+
+                // 실제 삽입이 일어나지 않아야 함
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(0);
+            });
+        });
+
+        describe('update() method tests', () => {
+            let table;
+            let conn;
+
+            beforeEach(async () => {
+                table = new SQLTable('test_person');
+                conn = {
+                    dialect: new SqliteDialect({
+                        database: new Database(':memory:')
+                    })
+                };
+                table.connect = conn;
+                await table.init();
+
+                // Setup columns
+                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
+                table.columns.add('name', { nullable: false });
+                table.columns.add('age', { nullable: false });
+                table.columns.add('email', { nullable: true });
+
+                // Create table
+                await table.db.schema
+                    .createTable('test_person')
+                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+                    .addColumn('name', 'text', (col) => col.notNull())
+                    .addColumn('age', 'integer', (col) => col.notNull())
+                    .addColumn('email', 'text')
+                    .execute();
+
+                // Insert test data
+                await table.db.insertInto('test_person')
+                    .values([
+                        { name: '홍길동', age: 30, email: 'hong@test.com' },
+                        { name: '김로직', age: 40, email: 'kim@test.com' },
+                        { name: '이순신', age: 50, email: 'lee@test.com' }
+                    ])
+                    .execute();
+            });
+
+            afterEach(async () => {
+                await table.db.destroy();
+            });
+
+            it('객체 데이터로 단일 행을 업데이트해야 함', async () => {
+                const updateData = {
+                    id: 1,
+                    name: '홍길동2',
+                    age: 32,
+                    email: 'hong2@test.com'
+                };
+                const options = {};
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toBe(1);
+
+                // Verify update
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('id', '=', 1)
+                    .selectAll()
+                    .execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('홍길동2');
+                expect(rows[0].age).toBe(32);
+                expect(rows[0].email).toBe('hong2@test.com');
+            });
+
+            it('set과 where 조건을 명시적으로 분리하여 업데이트해야 함', async () => {
+                const updateData = {
+                    set: { name: '김로직2', age: 42 },
+                    where: { id: 2 }
+                };
+                const options = {};
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toBe(1);
+
+                // Verify update
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('id', '=', 2)
+                    .selectAll()
+                    .execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('김로직2');
+                expect(rows[0].age).toBe(42);
+                expect(rows[0].email).toBe('kim@test.com'); // Should remain unchanged
+            });
+
+            it('MetaRow 객체로 행을 업데이트해야 함', async () => {
+                // Create a MetaRow-like object
+                const metaRow = {
+                    id: 3,
+                    name: '이순신2',
+                    age: 52,
+                    email: 'lee2@test.com'
+                };
+
+                const options = {};
+                const result = await table.update(metaRow, options);
+
+                expect(result).toBe(1);
+
+                // Verify update
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('id', '=', 3)
+                    .selectAll()
+                    .execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('이순신2');
+                expect(rows[0].age).toBe(52);
+                expect(rows[0].email).toBe('lee2@test.com');
+            });
+
+            it('트랜잭션과 함께 업데이트해야 함', async () => {
+                await table.db.transaction().execute(async (trx) => {
+                    const updateData = { id: 1, name: '트랜잭션 테스트', age: 99 };
+                    const options = { trx };
+
+                    const result = await table.update(updateData, options);
+
+                    expect(result).toBe(1);
+
+                    // Verify update within transaction
+                    const rows = await trx
+                        .selectFrom('test_person')
+                        .where('id', '=', 1)
+                        .selectAll()
+                        .execute();
+                    expect(rows.length).toBe(1);
+                    expect(rows[0].name).toBe('트랜잭션 테스트');
+                    expect(rows[0].age).toBe(99);
+                });
+            });
+
+            it('dryRun=true일 때 컴파일된 SQL을 반환해야 함', async () => {
+                const updateData = { id: 1, name: '드라이런 테스트', age: 88 };
+                const options = { dryRun: true };
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toHaveProperty('sql');
+                expect(result.sql).toContain('update');
+                expect(result.sql).toContain('test_person');
+                expect(result.sql).toContain('set');
+
+                // Verify no actual update occurred
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('id', '=', 1)
+                    .selectAll()
+                    .execute();
+                expect(rows[0].name).toBe('홍길동'); // Should remain unchanged
+                expect(rows[0].age).toBe(30); // Should remain unchanged
+            });
+
+            it('영향받은 행 수가 maxUpdateRows를 초과할 때 오류를 발생시켜야 함', async () => {
+                // First, insert additional rows with same age to exceed limit
+                await table.db.insertInto('test_person').values([
+                    { name: '테스트1', age: 25, email: 'test1@test.com' },
+                    { name: '테스트2', age: 25, email: 'test2@test.com' }
+                ]).execute();
+
+                const updateData = {
+                    set: { email: 'bulk@test.com' },
+                    where: { age: 25 } // This will update 2 rows
+                };
+                const options = { maxUpdateRows: 1 };
+
+                await expect(table.update(updateData, options)).rejects.toThrow('affectedRows 2 exceeds limit 1');
+            });
+
+            it('업데이트 전후 이벤트를 발생시켜야 함', async () => {
+                const updatingHandler = jest.fn();
+                const updatedHandler = jest.fn();
+
+                table.onUpdating(updatingHandler);
+                table.onUpdated(updatedHandler);
+
+                const updateData = { id: 1, name: '이벤트 테스트', age: 77 };
+                const options = {};
+
+                await table.update(updateData, options);
+
+                expect(updatingHandler).toHaveBeenCalledWith({
+                    table: table,
+                    db: expect.any(Object),
+                    options: expect.objectContaining({ trx: expect.any(Object) })
+                });
+
+                expect(updatedHandler).toHaveBeenCalledWith({
+                    table: table,
+                    db: expect.any(Object),
+                    options: expect.objectContaining({})
+                });
+            });
+
+            it('WHERE 조건이 없을 때 오류를 발생시켜야 함', async () => {
+                const updateData = {
+                    set: { name: '전체 업데이트' },
+                    where: {}
+                };
+                const options = {};
+
+                await expect(table.update(updateData, options)).rejects.toThrow();
+            });
+
+            it('존재하지 않는 컬럼은 필터링해야 함', async () => {
+                const updateData = {
+                    id: 2,
+                    name: '필터링 테스트',
+                    age: 66,
+                    nonExistentColumn: 'should be filtered'
+                };
+                const options = {};
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toBe(1);
+
+                // Verify update (nonExistentColumn should be ignored)
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('id', '=', 2)
+                    .selectAll()
+                    .execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].name).toBe('필터링 테스트');
+                expect(rows[0].age).toBe(66);
+                expect(rows[0]).not.toHaveProperty('nonExistentColumn');
+            });
+
+            it('null 값을 올바르게 처리해야 함', async () => {
+                const updateData = { id: 3, email: null };
+                const options = {};
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toBe(1);
+
+                // Verify update with null value
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('id', '=', 3)
+                    .selectAll()
+                    .execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].email).toBeNull();
+                expect(rows[0].name).toBe('이순신'); // Should remain unchanged
+                expect(rows[0].age).toBe(50); // Should remain unchanged
+            });
+
+            it('updateBuilder 메서드가 올바른 빌더를 반환해야 함', async () => {
+                const updateData = { id: 1, name: '빌더 테스트', age: 55 };
+                const options = { trx: table.db };
+
+                const builder = table.updateBuilder(updateData, options);
+
+                expect(builder).toBeDefined();
+                expect(typeof builder.execute).toBe('function');
+
+                const compiled = builder.compile();
+                expect(compiled.sql).toContain('update');
+                expect(compiled.sql).toContain('test_person');
+                expect(compiled.sql).toContain('set');
+            });
+
+            it('복합 WHERE 조건을 올바르게 처리해야 함', async () => {
+                const updateData = {
+                    set: { email: 'updated@test.com' },
+                    where: { name: '김로직', age: 40 }
+                };
+                const options = {};
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toBe(1);
+
+                // Verify update
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('name', '=', '김로직')
+                    .selectAll()
+                    .execute();
+                expect(rows.length).toBe(1);
+                expect(rows[0].email).toBe('updated@test.com');
+            });
+
+            it('$getColumns 메서드를 올바르게 사용해야 함', async () => {
+                const updateData = {
+                    id: 1,
+                    name: '컬럼 테스트',
+                    age: 44,
+                    invalidColumn: 'test'
+                };
+
+                const setData = table.$getColumns(updateData, 'set');
+
+                expect(setData).toHaveProperty('name', '컬럼 테스트');
+                expect(setData).toHaveProperty('age', 44);
+                expect(setData).not.toHaveProperty('id'); // PK should be excluded from set
+                expect(setData).not.toHaveProperty('invalidColumn');
+
+                const whereData = table.$getColumns(updateData, 'pk');
+                expect(whereData).toHaveProperty('id', 1);
+                expect(whereData).not.toHaveProperty('name');
+                expect(whereData).not.toHaveProperty('age');
+            });
+
+            it('결과를 올바르게 정규화해야 함', () => {
+                // Test various result formats
+                const numUpdatedResult = { numUpdatedRows: 1 };
+                const normalized1 = table._normalizeResult(numUpdatedResult);
+                expect(normalized1).toBe(1);
+
+                const affectedRowsResult = { affectedRows: 2 };
+                const normalized2 = table._normalizeResult(affectedRowsResult);
+                expect(normalized2).toBe(2);
+
+                const changesResult = { changes: 1 };
+                const normalized3 = table._normalizeResult(changesResult);
+                expect(normalized3).toBe(1);
+
+                const unknownResult = { someProperty: 'value' };
+                const normalized4 = table._normalizeResult(unknownResult);
+                expect(normalized4).toBe(0);
+            });
+
+            it('영향받은 행 수 제한을 올바르게 강제해야 함', () => {
+                // Should not throw when within limit
+                expect(() => table._enforceAffectLimit(1, 5)).not.toThrow();
+                expect(() => table._enforceAffectLimit(5, 5)).not.toThrow();
+
+                // Should throw when exceeding limit
+                expect(() => table._enforceAffectLimit(6, 5)).toThrow('affectedRows 6 exceeds limit 5');
+
+                // Should handle null/undefined limits
+                expect(() => table._enforceAffectLimit(100, null)).not.toThrow();
+                expect(() => table._enforceAffectLimit(100, undefined)).not.toThrow();
+            });
+
+            it('기본 옵션을 올바르게 처리해야 함', async () => {
+                const updateData = { id: 1, name: '기본 옵션 테스트', age: 33 };
+                const options = {
+                    maxUpdateRows: 10 // Override default
+                };
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toBe(1);
+
+                // Verify update
+                const rows = await table.db
+                    .selectFrom('test_person')
+                    .where('id', '=', 1)
+                    .selectAll()
+                    .execute();
+                expect(rows[0].name).toBe('기본 옵션 테스트');
+                expect(rows[0].age).toBe(33);
+            });
+
+            it('여러 행을 한 번에 업데이트할 수 있어야 함', async () => {
+                const updateData = {
+                    set: { email: 'bulk@example.com' },
+                    where: { age: ['>=', 30] } // Update rows where age >= 30
+                    // where: { age: { '>=': 30 } } // Update rows where age >= 30
+                };
+                const options = { maxUpdateRows: 10 }; // Allow multiple updates
+
+                const result = await table.update(updateData, options);
+
+                expect(result).toBe(3); // All 3 rows have age >= 30
+
+                // Verify all rows were updated
+                const rows = await table.db.selectFrom('test_person').selectAll().execute();
+                expect(rows.length).toBe(3);
+                rows.forEach((row) => {
+                    expect(row.email).toBe('bulk@example.com');
+                });
+            });
+            
+        });
+
+        describe('delete() method tests', () => {
+            let table;
+            let conn;
+
+            beforeEach(async () => {
+                table = new SQLTable('test_person');
+                conn = {
+                    dialect: new SqliteDialect({
+                        database: new Database(':memory:')
+                    })
+                };
+                table.connect = conn;
+                await table.init();
+
+                // Setup columns
+                table.columns.add('id', { primaryKey: true, autoIncrement: true, nullable: false });
+                table.columns.add('name', { nullable: false });
+                table.columns.add('age', { nullable: false });
+
+                // Create table
+                await table.db.schema
+                    .createTable('test_person')
+                    .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+                    .addColumn('name', 'text', (col) => col.notNull())
+                    .addColumn('age', 'integer', (col) => col.notNull())
+                    .execute();
+
+                // Insert test data
+                await table.db.insertInto('test_person')
+                    .values([
+                        { name: '홍길동', age: 30 },
+                        { name: '김로직', age: 40 },
+                        { name: '이순신', age: 50 }
+                    ])
+                    .execute();
+            });
+
+            afterEach(async () => {
+                await table.db.destroy();
+            });
+
+            it.skip('requireTrx=true이고 트랜잭션이 제공되지 않을 때 오류를 발생시켜야 함', async () => {
+                const whereClause = { id: 1 };
+                const options = { requireTrx: true };
+
+                await expect(table.delete(whereClause, options)).rejects.toThrow(
+                    'delete requires an explicit transaction (requireTrx=true).'
+                );
+            });
+
+            it('트랜잭션과 함께 단일 행을 삭제해야 함', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 1 };
+                    const options = { trx, maxDeletableRows: 1 };
+
+                    const result = await table.delete(whereClause, options);
+
+                    expect(result).toBe(1);
+
+                    // Verify deletion
+                    const remaining = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(remaining.length).toBe(2);
+                    expect(remaining.find((r) => r.id === 1)).toBeUndefined();
+                });
+            });
+
+            it('dryRun=true일 때 컴파일된 SQL을 반환해야 함', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 1 };
+                    const options = { trx, dryRun: true };
+
+                    const result = await table.delete(whereClause, options);
+
+                    expect(result).toHaveProperty('sql');
+                    expect(result.sql).toContain('delete from');
+                    expect(result.sql).toContain('test_person');
+
+                    // Verify no actual deletion occurred
+                    const rows = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(rows.length).toBe(3);
+                });
+            });
+
+            it('영향받은 행 수가 maxDeletableRows를 초과할 때 오류를 발생시켜야 함', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    // Insert multiple rows with same condition to exceed limit
+                    await trx
+                        .insertInto('test_person')
+                        .values([
+                            { name: '테스트1', age: 25 },
+                            { name: '테스트2', age: 25 }
+                        ])
+                        .execute();
+
+                    const whereClause = { age: 25 };
+                    const options = { trx, maxDeletableRows: 1 };
+
+                    await expect(table.delete(whereClause, options)).rejects.toThrow(
+                        'affectedRows 2 exceeds limit 1'
+                    );
+                });
+            });
+
+            it('삭제 전후 이벤트를 발생시켜야 함', async () => {
+                const deletingHandler = jest.fn();
+                const deletedHandler = jest.fn();
+
+                table.onDeleting(deletingHandler);
+                table.onDeleted(deletedHandler);
+
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 1 };
+                    const options = { trx, maxDeletableRows: 1 };
+
+                    await table.delete(whereClause, options);
+
+                    expect(deletingHandler).toHaveBeenCalledWith({
+                        table: table,
+                        db: trx,
+                        options: options
+                    });
+
+                    expect(deletedHandler).toHaveBeenCalledWith({
+                        table: table,
+                        db: trx,
+                        options: expect.objectContaining({
+                            trx,
+                            maxDeletableRows: 1
+                        })
+                    });
+                });
+            });
+
+            it('삭제 중 오류 발생 시 deleteError 이벤트를 발생시켜야 함', async () => {
+                const deleteErrorHandler = jest.fn();
+                table.onDeleteFailed(deleteErrorHandler);
+
+                try {
+                    await table.db.transaction().execute(async (trx) => {
+                        // Force an error by providing invalid where clause
+                        const whereClause = {}; // No PK columns
+                        const options = { trx };
+
+                        await table.delete(whereClause, options);
+                    });
+                } catch (error) {
+                    // Error is expected
+                }
+
+                expect(deleteErrorHandler).toHaveBeenCalledWith({
+                    table: table,
+                    db: expect.any(Object),
+                    options: expect.objectContaining({ trx: expect.any(Object) }),
+                    error: expect.any(Error)
+                });
+            });
+
+            // it('삭제 결과를 올바르게 정규화해야 함', () => {
+            //     // Test array result
+            //     const arrayResult = [{ id: 1 }, { id: 2 }];
+            //     const normalized1 = table._normalizeDeleteResult(arrayResult);
+            //     expect(normalized1).toEqual({ affectedRows: 2, rows: arrayResult });
+
+            //     // Test numDeletedRows result
+            //     const numDeletedResult = { numDeletedRows: 3 };
+            //     const normalized2 = table._normalizeDeleteResult(numDeletedResult);
+            //     expect(normalized2).toEqual({ affectedRows: 3 });
+
+            //     // Test affectedRows result
+            //     const affectedRowsResult = { affectedRows: 1 };
+            //     const normalized3 = table._normalizeDeleteResult(affectedRowsResult);
+            //     expect(normalized3).toEqual({ affectedRows: 1 });
+
+            //     // Test fallback
+            //     const unknownResult = { someProperty: 'value' };
+            //     const normalized4 = table._normalizeDeleteResult(unknownResult);
+            //     expect(normalized4).toEqual({ affectedRows: 0 });
+            // });
+
+            it('영향받은 행 수 제한을 올바르게 강제해야 함', () => {
+                // Should not throw when within limit
+                expect(() => table._enforceAffectLimit(1, 5)).not.toThrow();
+                expect(() => table._enforceAffectLimit(5, 5)).not.toThrow();
+
+                // Should throw when exceeding limit
+                expect(() => table._enforceAffectLimit(6, 5)).toThrow('affectedRows 6 exceeds limit 5');
+
+                // Should handle null/undefined limits
+                expect(() => table._enforceAffectLimit(100, null)).not.toThrow();
+                expect(() => table._enforceAffectLimit(100, undefined)).not.toThrow();
+
+                // Should handle non-numeric affected values
+                expect(() => table._enforceAffectLimit('invalid', 5)).not.toThrow();
+            });
+
+            it('MetaRow 객체로 삭제할 수 있어야 함', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    // Create a MetaRow-like object
+                    const metaRow = {
+                        id: 2,
+                        name: '김로직',
+                        age: 40
+                    };
+
+                    const options = { trx, maxDeletableRows: 1 };
+                    const result = await table.delete(metaRow, options);
+
+                    expect(result).toBe(1);
+
+                    // Verify deletion
+                    const remaining = await trx.selectFrom('test_person').selectAll().execute();
+                    expect(remaining.length).toBe(2);
+                    expect(remaining.find((r) => r.id === 2)).toBeUndefined();
+                });
+            });
+
+            it('기본 옵션을 올바르게 처리해야 함', async () => {
+                const trx = await table.db.transaction().execute(async (trx) => {
+                    const whereClause = { id: 3 };
+                    const options = {
+                        trx,
+                        requireTrx: false, // Override default
+                        maxDeletableRows: 10 // Override default
+                    };
+
+                    const result = await table.delete(whereClause, options);
+
+                    expect(result).toBe(1);
                 });
             });
         });

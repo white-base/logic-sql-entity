@@ -67,9 +67,11 @@ class SQLTable extends MetaTable {
     onCreating(handler) {
         return this._event.on('creating', handler);
     }
+
     onCreated(handler) {
         return this._event.on('created', handler);
     }
+
     onCreatedFailed(handler) {
         return this._event.on('createFailed', handler);
     }
@@ -77,9 +79,11 @@ class SQLTable extends MetaTable {
     onDropping(handler) {
         return this._event.on('dropping', handler);
     }
+
     onDropped(handler) {
         return this._event.on('dropped', handler);
     }
+
     onDropFailed(handler) {
         return this._event.on('dropFailed', handler);
     }
@@ -87,9 +91,11 @@ class SQLTable extends MetaTable {
     onInserting(handler) {
         return this._event.on('inserting', handler);
     }
+
     onInserted(handler) {
         return this._event.on('inserted', handler);
     }
+
     onInsertFailed(handler) {
         return this._event.on('insertFailed', handler);
     }
@@ -97,9 +103,11 @@ class SQLTable extends MetaTable {
     onSelecting(handler) {
         return this._event.on('selecting', handler);
     }
+
     onSelected(handler) {
         return this._event.on('selected', handler);
     }
+
     onSelectFailed(handler) {
         return this._event.on('selectFailed', handler);
     }
@@ -107,9 +115,11 @@ class SQLTable extends MetaTable {
     onUpdating(handler) {
         return this._event.on('updating', handler);
     }
+
     onUpdated(handler) {
         return this._event.on('updated', handler);
     }
+
     onUpdateFailed(handler) {
         return this._event.on('updateFailed', handler);
     }
@@ -117,9 +127,11 @@ class SQLTable extends MetaTable {
     onDeleting(handler) {
         return this._event.on('deleting', handler);
     }
+
     onDeleted(handler) {
         return this._event.on('deleted', handler);
     }
+
     onDeleteFailed(handler) {
         return this._event.on('deleteFailed', handler);
     }
@@ -412,7 +424,7 @@ class SQLTable extends MetaTable {
             }
 
             await this._event.emit('created', { table: this, db: db, options: safe });
-            return;
+            return true;
 
         } catch (error) {
             await this._event.emit('createFailed', { table: this, db: db, options: safe, error });
@@ -428,7 +440,7 @@ class SQLTable extends MetaTable {
     * =========================================================== */
    
     /** Stage1: 테이블/컬럼 + PK + UNIQUE (+SQLite는 FK 포함) */
-    $createStage1(trx, options = { execute: true }) {
+    $createStage1(trx) {
         const db = trx || this.db;
         const vendor = this.profile?.vendor || 'unknown';
 
@@ -542,7 +554,7 @@ class SQLTable extends MetaTable {
     }
 
     /** Stage2: FK (SQLite는 스킵) */
-    $createStage2_FKs(trx, options = { execute: true }) {
+    $createStage2_FKs(trx) {
         const db = trx || this.db;
         const vendor = this.profile?.vendor || 'unknown';
         const sql = [];
@@ -578,7 +590,7 @@ class SQLTable extends MetaTable {
     }
 
     /** Stage3: 보조 인덱스 */
-    $createStage3_Indexes(trx, options = { execute: true }) {
+    $createStage3_Indexes(trx) {
         const db = trx || this.db;
         const vendor = this.profile?.vendor || 'unknown';
         const sql = [];
@@ -633,7 +645,7 @@ class SQLTable extends MetaTable {
             await builder.execute();
 
             await this._event.emit('dropped', { table: this, db: db, options: safe });
-            return;
+            return true;
 
         } catch (error) {
             await this._event.emit('dropFailed', { table: this, db: db, options: safe, error });
@@ -718,7 +730,7 @@ class SQLTable extends MetaTable {
     
     async _select(p_select, p_options) {
         const db = p_options.trx;
-        const safe = { maxSelectRows: 100, dryRun: false, fillRows: true, clearRows: true, ...p_options };
+        const safe = { dryRun: false, clearRows: true, ...p_options };
 
         await this._event.emit('selecting', { table: this, db: db, options: p_options });
 
@@ -736,18 +748,122 @@ class SQLTable extends MetaTable {
                 this.rows.clear();
             }
             
-            if (safe.fillRows === true) {
-                result.forEach(row => {
-                    this.rows.add(row);
-                });
-            }
+            // if (safe.fillRows === true) {
+            result.forEach(row => {
+                this.rows.add(row);
+            });
+            // }
 
-            this._enforceAffectLimit(result.length, safe.maxSelectRows);
+            // this._enforceAffectLimit(result.length, safe.maxSelectRows);
             await this._event.emit('selected', { table: this, db: db, options: safe });
             return result;
 
         } catch (error) {
             await this._event.emit('selectFailed', { table: this, db: db, options: safe, error });
+            throw error;
+        }
+    }
+
+    //  *************** INSERT *********************
+    async insert(p_data, p_options) {
+        const db = p_options?.trx || this.db;
+        let result;
+
+        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
+            await db.transaction().execute(async (trx) => {
+                result = await this._insertAll(trx, p_data, p_options);
+            });
+        } else {
+            result = await this._insertAll(db, p_data, p_options);
+        }
+        return result;
+    }
+
+    insertBuilder(p_data, p_options) {
+        const db = p_options.trx || this.db;
+        const hasReturning = this.profile.features?.hasReturning || false;
+        let data = {};
+        let builder;
+        
+        data = this.$getColumns(p_data, 'data');
+
+        if (Object.keys(data).length === 0) throw new Error('insert: 삽입할 데이터가 없습니다.');
+
+        builder = db.insertInto(this.tableName)
+            .values({ ...data });
+
+        if (hasReturning) {
+            builder = builder.returningAll();
+        }
+        return builder;
+    }
+
+    async _insertAll(trxOrDb, p_data, p_options) {
+        if (Array.isArray(p_data)) {
+            const results = [];
+            for (const row of p_data) {
+                const res = await this._insert(row, { ...p_options, trx: trxOrDb });
+                results.push(res);
+            }
+            return results;
+        } else {
+            return await this._insert(p_data, { ...p_options, trx: trxOrDb });
+        }
+    }
+
+    async _insert(p_data, p_options) {
+        const db = p_options.trx;
+        const safe = { dryRun: false, ...p_options };
+        const hasReturning = this.profile.features?.hasReturning;
+
+        await this._event.emit('inserting', { table: this, db: db, options: p_options });
+
+        try {
+            const builder = this.insertBuilder(p_data, p_options);
+
+            if (safe.dryRun === true) {
+                await this._event.emit('inserted', { table: this, db: db, options: safe });
+                return builder.compile();
+            }
+
+            const insResult = await builder.executeTakeFirstOrThrow();
+            // const normalized = this._normalizeInsertResult(result);
+
+            if (hasReturning === true || insResult.insertId === undefined) {
+                if (Object.keys(insResult).length === 0) throw new Error('Insert: 반환된 결과가 없습니다.');
+                await this._event.emit('inserted', { table: this, db: db, options: safe });
+                return insResult;
+            }
+
+            let selResult, selBuilder;
+            if (insResult.insertId > 0) {
+                const id = this.columns.find(c => c.primaryKey === true && c.autoIncrement === true)?.columnName;
+                // TODO: $select 변경
+                selBuilder = await this.selectBuilder({ where: { [id]: Number(insResult.insertId) }, page: 1, size: 1 }, p_options);
+                selResult = await selBuilder.executeTakeFirst();
+                
+            } else {
+                const where = {};
+                for (const [k, v] of this.columns.entries()) {
+                    if (v.primaryKey === true && p_row[v.columnName] !== undefined ) {
+                        where[v.columnName] = p_row[v.columnName];
+                    }
+                }
+                // TODO: $select 변경
+                selBuilder = await this.selectBuilder({ where: { [id]: Number(insResult.insertId) }, page: 1, size: 1 }, p_options);
+                // selBuilder = await this._select({ where: where, page: 1, size: 1 }, db);
+                selResult = await selBuilder.executeTakeFirst();
+            }
+            // TODO: 결과 없으면 오류
+            // this._enforceAffectLimit(norma`lized.affectedRows, safe.maxDeletableRows);
+            if (Object.keys(selResult).length === 0) throw new Error('Insert: 반환된 결과가 없습니다.');
+
+            await this._event.emit('inserted', { table: this, db: db, options: safe });
+            
+            return selResult;
+
+        } catch (error) {
+            await this._event.emit('insertFailed', { table: this, db: db, options: safe, error });
             throw error;
         }
     }
@@ -809,115 +925,6 @@ class SQLTable extends MetaTable {
 
         } catch (error) {
             await this._event.emit('updateFailed', { table: this, db: db, options: safe, error });
-            throw error;
-        }
-    }
-
-    //  *************** INSERT *********************
-    async insert(p_data, p_options) {
-        const db = p_options?.trx || this.db;
-        let result;
-
-        if (db && typeof db.transaction === 'function' && !p_options?.trx) {
-            await db.transaction().execute(async (trx) => {
-                if (Array.isArray(p_data)) {
-                    const results = [];
-                    for (const row of p_data) {
-                        const res = await this._insert(row, { ...p_options, trx });
-                        results.push(res);
-                    }
-                    result = results;
-                } else {
-                    result = await this._insert(p_data, { ...p_options, trx });
-                }
-            });
-        } else {
-            if (Array.isArray(p_data)) {
-                const results = [];
-                for (const row of p_data) {
-                    const res = await this._insert(row, { ...p_options, trx: db });
-                    results.push(res);
-                }
-                result = results;
-            } else {
-                result = await this._insert(p_data, { ...p_options, trx: db });
-            }
-        }
-        return result;
-    }
-
-    insertBuilder(p_data, p_options) {
-        const db = p_options.trx || this.db;
-        const hasReturning = this.profile.features?.hasReturning || false;
-        let data = {};
-        let builder;
-        
-        data = this.$getColumns(p_data, 'data');
-
-        if (Object.keys(data).length === 0) throw new Error('insert: 삽입할 데이터가 없습니다.');
-
-        builder = db.insertInto(this.tableName)
-            .values({ ...data });
-
-        if (hasReturning) {
-            builder = builder.returningAll();
-        }
-        return builder;
-    }
-
-    async _insert(p_data, p_options) {
-        const db = p_options.trx;
-        const safe = { maxDeletableRows: 1, dryRun: false, ...p_options };
-        const hasReturning = this.profile.features?.hasReturning;
-
-        await this._event.emit('inserting', { table: this, db: db, options: p_options });
-
-        try {
-            const builder = this.insertBuilder(p_data, p_options);
-
-            if (safe.dryRun === true) {
-                await this._event.emit('inserted', { table: this, db: db, options: safe });
-                return builder.compile();
-            }
-
-            const insResult = await builder.executeTakeFirstOrThrow();
-            // const normalized = this._normalizeInsertResult(result);
-
-            if (hasReturning === true || insResult.insertId === undefined) {
-                if (Object.keys(insResult).length === 0) throw new Error('Insert: 반환된 결과가 없습니다.');
-                await this._event.emit('inserted', { table: this, db: db, options: safe });
-                return insResult;
-            }
-
-            let selResult, selBuilder;
-            if (insResult.insertId > 0) {
-                const id = this.columns.find(c => c.primaryKey === true && c.autoIncrement === true)?.columnName;
-                // TODO: $select 변경
-                selBuilder = await this.selectBuilder({ where: { [id]: Number(insResult.insertId) }, page: 1, size: 1 }, p_options);
-                selResult = await selBuilder.executeTakeFirst();
-                
-            } else {
-                const where = {};
-                for (const [k, v] of this.columns.entries()) {
-                    if (v.primaryKey === true && p_row[v.columnName] !== undefined ) {
-                        where[v.columnName] = p_row[v.columnName];
-                    }
-                }
-                // TODO: $select 변경
-                selBuilder = await this.selectBuilder({ where: { [id]: Number(insResult.insertId) }, page: 1, size: 1 }, p_options);
-                // selBuilder = await this._select({ where: where, page: 1, size: 1 }, db);
-                selResult = await selBuilder.executeTakeFirst();
-            }
-            // TODO: 결과 없으면 오류
-            // this._enforceAffectLimit(norma`lized.affectedRows, safe.maxDeletableRows);
-            if (Object.keys(selResult).length === 0) throw new Error('Insert: 반환된 결과가 없습니다.');
-
-            await this._event.emit('inserted', { table: this, db: db, options: safe });
-            
-            return selResult;
-
-        } catch (error) {
-            await this._event.emit('insertFailed', { table: this, db: db, options: safe, error });
             throw error;
         }
     }
