@@ -8,7 +8,6 @@ export const list = async (req, res, option) => {
     const size = req.body?.size || 10;
     const basePath = req.baseUrl || '';
 
-    table.clear();
     await table.select({ page, size });
 
     res.render('sto-account/list', {
@@ -22,7 +21,6 @@ export const list = async (req, res, option) => {
 export const form = async (req, res, option) => {
     const basePath = req.baseUrl || '';
 
-    store.clear();
     await store.select({ where: { use_yn: 'Y' } });
 
     res.render('sto-account/form', {
@@ -38,8 +36,6 @@ export const detail = async (req, res, option) => {
     const basePath = req.baseUrl || '';
     const acc_idx = req.params.id;
 
-    table.clear();
-    // await table.select(1, 1, { acc_idx });
     await table.select({ where: acc_idx });
 
     res.render('sto-account/detail', {

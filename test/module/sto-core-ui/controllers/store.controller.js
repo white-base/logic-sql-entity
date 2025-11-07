@@ -7,8 +7,6 @@ export const list = async (req, res, option) => {
     const size = req.body?.size || 10;
     const basePath = req.baseUrl || '';
 
-    table.clear();
-    // await table.select(page, size);
     await table.select({ page, size });
 
     res.render('store/list', {
@@ -33,7 +31,6 @@ export const detail = async (req, res, option) => {
     const basePath = req.baseUrl || '';
     const sto_id = req.params.id;
 
-    table.clear();
     await table.select({ where: sto_id });
 
     res.render('store/detail', {
@@ -44,7 +41,6 @@ export const detail = async (req, res, option) => {
         basePath: req.baseUrl
     });
 };
-
 
 export const add = async (req, res, option) => {
     const basePath = req.baseUrl || '';
