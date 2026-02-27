@@ -13,7 +13,7 @@ import { resolveDbFeatures } from './util/db-features.js';
 import { SQLTable } from './sql-table.js';
 
 // REVIEW: 개발후 제거
-import { viewTable } from '../temp/view-table.js';
+// import { viewTable } from '../temp/view-table.js';
 
 class SQLContext extends MetaElement {
     constructor(p_name) {
@@ -144,10 +144,10 @@ class SQLContext extends MetaElement {
 
                 // 처리완료
                 // await viewTable(sdb, '생성 검사 후 > 테이블 목록');
-                await viewTable(trx, '검사 > 생성 후 > 테이블 목록');
+                // await viewTable(trx, '검사 > 생성 후 > 테이블 목록');
 
                 await this.dropSchema(trx);
-                await viewTable(trx, '검사 > 삭제 후 > 테이블 목록');
+                // await viewTable(trx, '검사 > 삭제 후 > 테이블 목록');
                 
                 throw { rollback: true };
                 // throw new Error('Schema creation should have failed due to missing tables.');
@@ -160,7 +160,7 @@ class SQLContext extends MetaElement {
                     console.error('테이블 생성 에러:', msg);
                 }
             });
-            await viewTable(db, '검사 > 롤백 후 > 테이블 목록');
+            // await viewTable(db, '검사 > 롤백 후 > 테이블 목록');
 
         } else if (this.profile.vendor === 'mysql') {
             // MySQL에 대한 검증 로직 추가 TODO:
