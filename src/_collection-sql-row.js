@@ -18,26 +18,26 @@ class SQLRowCollection extends MetaRowCollection {
     }
 
     add(p_rows, p_isCheck) {
-      const pos = this.$elements.length;
+        const pos = this.$elements.length;
 
-      this.insertAt(pos, p_rows, p_isCheck);
-      return pos;
+        this.insertAt(pos, p_rows, p_isCheck);
+        return pos;
     }
 
     insertAt(p_index, p_row, p_isCheck) {
-      let sqlRow;
+        let sqlRow;
 
-      if (p_row instanceof SQLRow) {
-          sqlRow = p_row;
-      } else if (_isObject(p_row)) {
-          sqlRow = new SQLRow(this._owner);
-          for (const key in p_row) {
-              if (Object.prototype.hasOwnProperty.call(p_row, key)) {
-                  sqlRow[key] = p_row[key];
-              }
-          }
-      }
-      super.insertAt(p_index, sqlRow, p_isCheck);
+        if (p_row instanceof SQLRow) {
+            sqlRow = p_row;
+        } else if (_isObject(p_row)) {
+            sqlRow = new SQLRow(this._owner);
+            for (const key in p_row) {
+                if (Object.prototype.hasOwnProperty.call(p_row, key)) {
+                    sqlRow[key] = p_row[key];
+                }
+            }
+        }
+        super.insertAt(p_index, sqlRow, p_isCheck);
     }
 }
 

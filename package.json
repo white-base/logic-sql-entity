@@ -44,7 +44,7 @@
     "docs:ko": "npx typedoc --out docs/ko types/ko/index.d.ts types/ko/T.d.ts",
     "check": "npm run check:ts && npm run check:js",
     "check:ts": "tsc --noEmit",
-    "check:js": "eslint src/ --ext .js",
+    "check:js": "eslint src/ --ext .js  --fix",
     "check:duple": "node ./scripts/check-duplicates.mjs",
     "prepare": "npm run build",
     "update": "npm update && npm run build",

@@ -5,7 +5,7 @@
  * @param {string[]} cols     컬럼 배열
  */
 const makeIndexName = (tableName, groupKey, cols) =>
-  `idx_${tableName}_${groupKey}_${cols.join('_')}`;
+    `idx_${tableName}_${groupKey}_${cols.join('_')}`;
 
 /**
  * 컬럼 메타에서 인덱스 그룹 수집
@@ -14,38 +14,38 @@ const makeIndexName = (tableName, groupKey, cols) =>
  * @returns {Array}            [{ name, group, columns }]
  */
 export function collectIndexGroups(tableName, columns) {
-  const groups = new Map();
+    const groups = new Map();
 
-  for (const [colName, meta] of Object.entries(columns)) {
-    const idxs = meta.indexes;
-    if (!idxs) continue;
+    for (const [colName, meta] of Object.entries(columns)) {
+        const idxs = meta.indexes;
+        if (!idxs) continue;
 
-    // 단일 값도 배열처럼 처리
-    const arr = Array.isArray(idxs) ? idxs : [idxs];
+        // 단일 값도 배열처럼 처리
+        const arr = Array.isArray(idxs) ? idxs : [idxs];
 
-    // 같은 컬럼 내 중복 제거
-    for (const rawKey of new Set(arr)) {
-      if (rawKey === null || rawKey === undefined) continue;
-      const groupKey = String(rawKey).trim();
-      if (!groupKey) continue;
+        // 같은 컬럼 내 중복 제거
+        for (const rawKey of new Set(arr)) {
+            if (rawKey === null || rawKey === undefined) continue;
+            const groupKey = String(rawKey).trim();
+            if (!groupKey) continue;
 
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, []);
-      }
-      const cols = groups.get(groupKey);
-      if (!cols.includes(colName)) cols.push(colName);
+            if (!groups.has(groupKey)) {
+                groups.set(groupKey, []);
+            }
+            const cols = groups.get(groupKey);
+            if (!cols.includes(colName)) cols.push(colName);
+        }
     }
-  }
 
-  const out = [];
-  for (const [groupKey, cols] of groups.entries()) {
-    out.push({
-      name: makeIndexName(tableName, groupKey, cols),
-      group: groupKey,
-      columns: cols
-    });
-  }
-  return out;
+    const out = [];
+    for (const [groupKey, cols] of groups.entries()) {
+        out.push({
+            name: makeIndexName(tableName, groupKey, cols),
+            group: groupKey,
+            columns: cols
+        });
+    }
+    return out;
 }
 
 // /* ============================

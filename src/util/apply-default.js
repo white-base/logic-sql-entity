@@ -1,4 +1,4 @@
-import { sql }                          from 'kysely'
+import { sql }                          from 'kysely';
 
 export function applyDefault(colBuilder, def, vendor) {
 
@@ -16,16 +16,16 @@ export function applyDefault(colBuilder, def, vendor) {
 
 
     switch (def.kind) {
-        case 'literal':
+    case 'literal':
         // 단순 리터럴(문자열/숫자/불리언)
         return colBuilder.defaultTo(def.value);
 
-        case 'now':
+    case 'now':
         // 현재시각
         // 대부분 CURRENT_TIMESTAMP 로 커버
         return colBuilder.defaultTo(sql`CURRENT_TIMESTAMP`);
 
-        case 'uuid':
+    case 'uuid':
         if (vendor === 'postgres') {
             // 확장 상황에 맞게 하나 선택
             return colBuilder.defaultTo(sql`gen_random_uuid()`);
@@ -39,7 +39,7 @@ export function applyDefault(colBuilder, def, vendor) {
             return colBuilder.defaultTo(sql`lower(hex(randomblob(16)))`);
         }
 
-        case 'json':
+    case 'json':
         if (vendor === 'postgres') {
             return colBuilder.defaultTo(sql`'{}'::jsonb`);
         } else if (vendor === 'mysql') {
@@ -53,11 +53,11 @@ export function applyDefault(colBuilder, def, vendor) {
         }
 
         // 필요 시 확장 포인트
-        case 'sql':
+    case 'sql':
         // def.sql 은 sql`...` 표현식이라고 가정
         return colBuilder.defaultTo(def.sql);
 
-        default:
+    default:
         return colBuilder;
     }
 }

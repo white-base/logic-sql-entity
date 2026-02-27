@@ -9,8 +9,8 @@ import { MetaRow }                      from 'logic-entity';
 import { SQLColumn }                    from './sql-column.js';
 // import { SQLRow }                       from './sql-row.js';
 
-import { Kysely }                       from 'kysely'
-import { sql }                          from 'kysely'
+import { Kysely }                       from 'kysely';
+import { sql }                          from 'kysely';
 import { collectIndexGroups }           from './util/collect-index-group.js';
 import { convertStandardToVendor }     from './util/convert-data-type.js';
 import { applyDefault }                from './util/apply-default.js';
@@ -319,24 +319,24 @@ class SQLTable extends MetaTable {
         // references: { target:'users.id', group?:'fk1', name?, onDelete?, onUpdate?, match?, deferrable?, initiallyDeferred? }
         const groups = new Map(); // groupKey -> { name, cols:[], refTable, refCols:[], opts }
         for (const [key, col] of this.columns.entries()) {
-        const ref = col.references;
-        if (!ref || !ref.target || typeof ref.target !== 'string') continue;
+            const ref = col.references;
+            if (!ref || !ref.target || typeof ref.target !== 'string') continue;
 
-        const colName = (typeof col.name === 'string' && col.name) ? col.name : key;
-        const [refTable, refCol] = ref.target.split('.');
-        const gk = (ref.group || ref.name || `fk_${this.tableName}_${colName}`).trim();
+            const colName = (typeof col.name === 'string' && col.name) ? col.name : key;
+            const [refTable, refCol] = ref.target.split('.');
+            const gk = (ref.group || ref.name || `fk_${this.tableName}_${colName}`).trim();
 
-        if (!groups.has(gk)) {
-            groups.set(gk, { name: ref.name, cols: [], refTable, refCols: [], opts: { ...ref } });
-        }
-        const g = groups.get(gk);
-        if (!g.cols.includes(colName)) g.cols.push(colName);
-        if (!g.refCols.includes(refCol)) g.refCols.push(refCol);
+            if (!groups.has(gk)) {
+                groups.set(gk, { name: ref.name, cols: [], refTable, refCols: [], opts: { ...ref } });
+            }
+            const g = groups.get(gk);
+            if (!g.cols.includes(colName)) g.cols.push(colName);
+            if (!g.refCols.includes(refCol)) g.refCols.push(refCol);
 
-        // 동일 그룹 내 테이블 불일치 방지
-        if (g.refTable !== refTable) {
-            throw new Error(`FK group "${gk}" has mixed target tables: ${g.refTable} vs ${refTable}`);
-        }
+            // 동일 그룹 내 테이블 불일치 방지
+            if (g.refTable !== refTable) {
+                throw new Error(`FK group "${gk}" has mixed target tables: ${g.refTable} vs ${refTable}`);
+            }
         }
         return groups;
     }
@@ -536,17 +536,17 @@ class SQLTable extends MetaTable {
             const fkGroups = this._collectFkGroups(); // Map<groupKey, {name, cols, refTable, refCols, opts}>
             for (const [g, def] of fkGroups) {
                 tb = tb.addForeignKeyConstraint(
-                def.name || g,
-                def.cols,
-                def.refTable,
-                def.refCols,
-                (cb0) => {
-                    let cb = cb0;
-                    if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
-                    if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
-                    // match/deferrable 등은 SQLite에서 무시되므로 생략
-                    return cb;
-                }
+                    def.name || g,
+                    def.cols,
+                    def.refTable,
+                    def.refCols,
+                    (cb0) => {
+                        let cb = cb0;
+                        if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
+                        if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
+                        // match/deferrable 등은 SQLite에서 무시되므로 생략
+                        return cb;
+                    }
                 );
             }
         }
@@ -569,20 +569,20 @@ class SQLTable extends MetaTable {
             let builder = db.schema
                 .alterTable(this.tableName)
                 .addForeignKeyConstraint(
-                def.name || g,
-                def.cols,
-                def.refTable,
-                def.refCols,
-                (cb0) => {
-                    let cb = cb0;
-                    if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
-                    if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
-                    // match/deferrable: PG 한정. 필요 시 벤더 체크 후 적용.
-                    if (def.opts?.match && vendor === 'postgres' && typeof cb.match === 'function') {
-                    cb = cb.match(def.opts.match.toLowerCase());
+                    def.name || g,
+                    def.cols,
+                    def.refTable,
+                    def.refCols,
+                    (cb0) => {
+                        let cb = cb0;
+                        if (def.opts?.onDelete) cb = cb.onDelete(def.opts.onDelete.toLowerCase());
+                        if (def.opts?.onUpdate) cb = cb.onUpdate(def.opts.onUpdate.toLowerCase());
+                        // match/deferrable: PG 한정. 필요 시 벤더 체크 후 적용.
+                        if (def.opts?.match && vendor === 'postgres' && typeof cb.match === 'function') {
+                            cb = cb.match(def.opts.match.toLowerCase());
+                        }
+                        return cb;
                     }
-                    return cb;
-                }
                 );
             builders.push(builder);
         }
@@ -606,7 +606,7 @@ class SQLTable extends MetaTable {
             builders.push(builder);
         }
         return builders;
-}
+    }
 
     //  *************** DROP *********************
     async drop(p_options) {

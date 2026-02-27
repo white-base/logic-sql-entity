@@ -176,7 +176,7 @@ class SQLColumn extends MetaColumn {
                     throw new Error(`Invalid index value in array: ${x}`); // TODO: ExtendError 정의
                 }
                 if (typeof x === 'string' && x.trim() === '') {
-                    throw new Error(`index string value in array cannot be empty.`); // TODO: ExtendError 정의
+                    throw new Error('index string value in array cannot be empty.'); // TODO: ExtendError 정의
                 }
             });
             this._indexes = v.slice();
@@ -197,7 +197,7 @@ class SQLColumn extends MetaColumn {
             throw new Error(`Invalid unique value: ${v}`); // TODO: ExtendError 정의
         }
         if (typeof v === 'string' && v.trim() === '') {
-            throw new Error(`unique string value cannot be empty.`); // TODO: ExtendError 정의
+            throw new Error('unique string value cannot be empty.'); // TODO: ExtendError 정의
         }
         if (typeof v === 'string') {
             this._unique = v.trim();
@@ -220,7 +220,7 @@ class SQLColumn extends MetaColumn {
             throw new Error(`Invalid check value: ${v}`); // TODO: ExtendError 정의
         }
         if (typeof v === 'string' && v.trim() === '') {
-            throw new Error(`check string value cannot be empty.`); // TODO: ExtendError 정의
+            throw new Error('check string value cannot be empty.'); // TODO: ExtendError 정의
         }
         this._check = v; 
     }
